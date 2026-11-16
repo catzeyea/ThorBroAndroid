@@ -1,0 +1,32 @@
+# Versionskombi Kotlin 2.3.20 + Compose Multiplatform 1.10.3 + AGP 8.13.2.
+# Noch nicht mit einem Build getestet, beim ersten Sync in der IDE prüfen.
+# Auf AGP 9 umsteigen geht später, dafür muss core auf das Plugin
+# com.android.kotlin.multiplatform.library umgestellt werden:
+# https://kotlinlang.org/docs/multiplatform/multiplatform-project-agp-9-migration.html
+
+[versions]
+kotlin = "2.3.20"
+composeMultiplatform = "1.10.3"
+agp = "8.13.2"
+androidx-activity = "1.10.1"
+kotlinx-coroutines = "1.10.2"
+
+android-compileSdk = "36"
+android-targetSdk = "36"
+# 30 = Android 11, ab da gibt es "Zugriff auf alle Dateien" (MANAGE_EXTERNAL_STORAGE)
+android-minSdk = "30"
+
+[libraries]
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidLibrary = { id = "com.android.library", version.ref = "agp" }
