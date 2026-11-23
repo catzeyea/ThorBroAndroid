@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ThorBro Android Setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Inconsolata:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+.tab:focus-visible,.act:focus-visible{outline:4px solid #EFE7D2;outline-offset:4px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; box-sizing: border-box; padding: 24px 40px 20px; display: flex; flex-direction: column; gap: 20px; font-family: {{fontStack}}; color: #EFE7D2; background: #1a1e1f">
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<img src="/_blob/0eb3e09f856e1c33cce2d17a04f50fa1" alt="" width="52" height="52" style="width: 52px; height: 52px; display: block">
+<span style="font-weight: 700; font-size: 26px; letter-spacing: -0.01em">ThorBro</span>
+</div>
+<nav aria-label="Main" style="display: flex; align-items: center; gap: 10px">
+<span style="padding: 3px 9px; border-radius: 9px 7px 10px 7px; border: 2px solid rgba(239,231,210,0.5); font-size: 13px; font-weight: 600; color: #B4B6AA">L1</span>
+<a class="tab" href="AndroidStream.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">Stream</a>
+<a class="tab" href="AndroidGames.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">Games</a>
+<a class="tab" href="AndroidSetup.dc.html" style="padding: 11px 24px; border-radius: 22px 16px 24px 15px / 16px 22px 14px 24px; border: 2px solid #EFE7D2; background: #F0A94B; color: #1a1e1f; font-weight: 600; font-size: 18px; box-shadow: 3px 3px 0 #7a4a0f; transform: rotate(-1deg)">Setup</a>
+<a class="tab" href="AndroidSetup.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">About</a>
+<span style="padding: 3px 9px; border-radius: 7px 10px 7px 9px; border: 2px solid rgba(239,231,210,0.5); font-size: 13px; font-weight: 600; color: #B4B6AA">R1</span>
+</nav>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-weight: 700; font-size: 34px; letter-spacing: -0.02em">Connect your PC in 4 steps</h1>
+<span style="font-size: 16px; color: #B4B6AA">You only do this once. After that, Connect on the Stream tab is enough.</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 22px 26px; flex: 1; min-height: 0">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+<div style="box-sizing: border-box; display: flex; gap: 18px; padding: 20px 24px; border-radius: {{s.radius}}; border: 2px solid rgba(239,231,210,0.78); background: #252a2a; box-shadow: {{s.shadow}}">
+<span style="flex: none; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #EFE7D2; background: #A5B98C; color: #1a1e1f; font-weight: 700; font-size: 22px">{{s.n}}</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<span style="font-weight: 700; font-size: 22px; line-height: 1.2">{{s.title}}</span>
+<span style="font-size: 15px; line-height: 1.5; color: #C4C6BA">{{s.text}}</span>
+<span style="margin-top: auto; font-size: 14px; color: #F0A94B; font-weight: 600">{{s.tag}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; align-items: center; gap: 30px; font-size: 15px; color: #B4B6AA">
+<span style="display: inline-flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 14px">B</span>Back</span>
+<span style="display: inline-flex; align-items: center; gap: 10px"><span style="padding: 3px 9px; border-radius: 9px 7px 10px 7px; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 13px">L1</span><span style="padding: 3px 9px; border-radius: 7px 10px 7px 9px; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 13px">R1</span>Switch tab</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"font":{"editor":"enum","default":"JetBrains Mono","options":["JetBrains Mono","Inconsolata","IBM Plex Sans"]},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const stacks = { 'JetBrains Mono': "'JetBrains Mono', monospace", 'Inconsolata': "'Inconsolata', monospace", 'IBM Plex Sans': "'IBM Plex Sans', system-ui, sans-serif" };
+    const steps = [
+      { n: 1, title: 'Tailscale on PC and Thor', text: 'Install Tailscale on both and log in to the same account. This lets the Thor reach your PC from anywhere.', tag: 'once' },
+      { n: 2, title: 'Sunshine on the PC', text: 'Install Sunshine on the PC. It is the part that streams your games.', tag: 'once' },
+      { n: 3, title: 'Send the PC profile', text: 'On the PC open ThorBro, go to Stream and press Send to Thor app.', tag: 'again when your games change' },
+      { n: 4, title: 'Pair Moonlight', text: 'Press Connect on the Stream tab. Moonlight shows a PIN. Type it in Sunshine on the PC.', tag: 'once' }
+    ];
+    const radii = [
+      '22px 18px 24px 16px / 18px 24px 16px 22px',
+      '18px 24px 16px 22px / 24px 16px 22px 18px',
+      '24px 16px 20px 22px / 16px 22px 24px 18px',
+      '16px 22px 24px 18px / 22px 18px 16px 24px'
+    ];
+    const shadows = ['5px 5px 0 #0c0f0f', '4px 6px 0 #0c0f0f', '6px 4px 0 #0c0f0f', '5px 6px 0 #0c0f0f'];
+    return {
+      fontStack: stacks[this.props.font] || stacks['JetBrains Mono'],
+      steps: steps.map((s, i) => ({ ...s, radius: radii[i], shadow: shadows[i] }))
+    };
+  }
+}
+</script>
+</body>
+</html>

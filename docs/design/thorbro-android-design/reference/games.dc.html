@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ThorBro Android Games</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Inconsolata:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+.tab:focus-visible,.act:focus-visible{outline:4px solid #EFE7D2;outline-offset:4px}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; box-sizing: border-box; padding: 24px 40px 20px; display: flex; flex-direction: column; gap: 22px; font-family: {{fontStack}}; color: #EFE7D2; background: #1a1e1f">
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<img src="/_blob/0eb3e09f856e1c33cce2d17a04f50fa1" alt="" width="52" height="52" style="width: 52px; height: 52px; display: block">
+<span style="font-weight: 700; font-size: 26px; letter-spacing: -0.01em">ThorBro</span>
+</div>
+<nav aria-label="Main" style="display: flex; align-items: center; gap: 10px">
+<span style="padding: 3px 9px; border-radius: 9px 7px 10px 7px; border: 2px solid rgba(239,231,210,0.5); font-size: 13px; font-weight: 600; color: #B4B6AA">L1</span>
+<a class="tab" href="AndroidStream.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">Stream</a>
+<a class="tab" href="AndroidGames.dc.html" style="padding: 11px 24px; border-radius: 22px 16px 24px 15px / 16px 22px 14px 24px; border: 2px solid #EFE7D2; background: #F0A94B; color: #1a1e1f; font-weight: 600; font-size: 18px; box-shadow: 3px 3px 0 #7a4a0f; transform: rotate(-1deg)">Games</a>
+<a class="tab" href="AndroidSetup.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">Setup</a>
+<a class="tab" href="AndroidGames.dc.html" style="padding: 11px 22px; border-radius: 16px; border: 2px solid transparent; font-weight: 500; font-size: 18px">About</a>
+<span style="padding: 3px 9px; border-radius: 7px 10px 7px 9px; border: 2px solid rgba(239,231,210,0.5); font-size: 13px; font-weight: 600; color: #B4B6AA">R1</span>
+</nav>
+</div>
+
+<div style="display: flex; gap: 28px; flex: 1; min-height: 0">
+
+<section aria-label="Games from your PC" style="flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 20px 20px 16px; border-radius: 22px 18px 24px 16px / 18px 24px 16px 22px; border: 2px solid rgba(239,231,210,0.78); background: #252a2a; box-shadow: 5px 6px 0 #0c0f0f; display: flex; flex-direction: column; gap: 8px">
+<span style="padding: 0 10px 6px; font-size: 14px; color: #B4B6AA">games from your pc</span>
+<sc-for list="{{games}}" as="g" hint-placeholder-count="6">
+<a class="act" href="AndroidGames.dc.html" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px; height: 58px; box-sizing: border-box; border-radius: 14px 11px 15px 12px; border: 2px solid {{g.border}}; background: {{g.bg}}; color: {{g.fg}}; font-weight: {{g.weight}}; font-size: 20px; outline: {{g.ring}}; outline-offset: 4px">
+<span>{{g.name}}</span>
+</a>
+</sc-for>
+</section>
+
+<section aria-label="Selected game" style="flex: 0 0 440px; box-sizing: border-box; padding: 28px; border-radius: 26px 18px 24px 16px / 18px 26px 16px 24px; border: 2px solid #EFE7D2; background: #2b312e; box-shadow: 6px 6px 0 #0c0f0f; display: flex; flex-direction: column; gap: 14px">
+<span style="font-size: 14px; color: #B4B6AA">selected</span>
+<span style="font-weight: 700; font-size: 34px; line-height: 1.1">Hollow Knight</span>
+<span style="font-size: 16px; line-height: 1.5; color: #C4C6BA">Starts on Gaming PC through Moonlight.</span>
+<button class="act" type="button" style="margin-top: 14px; align-self: flex-start; display: inline-flex; align-items: center; gap: 14px; padding: 16px 32px; border-radius: 22px 26px 20px 28px / 26px 20px 28px 22px; border: 2px solid #EFE7D2; background: #F0A94B; color: #1a1e1f; font-family: inherit; font-weight: 700; font-size: 22px; box-shadow: 4px 4px 0 #7a4a0f; cursor: pointer">
+<span style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #1a1e1f; font-size: 15px">A</span>Play on Thor</button>
+<p style="margin: auto 0 0; font-size: 14px; line-height: 1.5; color: #B4B6AA">Missing a game? Add it on the PC, then press Send to Thor app in ThorBro.</p>
+</section>
+
+</div>
+
+<div style="display: flex; align-items: center; gap: 30px; font-size: 15px; color: #B4B6AA">
+<span style="display: inline-flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 14px">A</span>Play</span>
+<span style="display: inline-flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 14px">B</span>Back</span>
+<span style="display: inline-flex; align-items: center; gap: 10px"><span style="padding: 3px 9px; border-radius: 9px 7px 10px 7px; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 13px">L1</span><span style="padding: 3px 9px; border-radius: 7px 10px 7px 9px; border: 2px solid #EFE7D2; color: #EFE7D2; font-weight: 700; font-size: 13px">R1</span>Switch tab</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"font":{"editor":"enum","default":"JetBrains Mono","options":["JetBrains Mono","Inconsolata","IBM Plex Sans"]},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const stacks = { 'JetBrains Mono': "'JetBrains Mono', monospace", 'Inconsolata': "'Inconsolata', monospace", 'IBM Plex Sans': "'IBM Plex Sans', system-ui, sans-serif" };
+    const names = ['Hollow Knight', 'Celeste', 'Stardew Valley', 'Neon Abyss', 'Desktop', 'Steam Big Picture'];
+    return {
+      fontStack: stacks[this.props.font] || stacks['JetBrains Mono'],
+      games: names.map((n, i) => {
+        const sel = i === 0;
+        return {
+          name: n,
+          bg: sel ? '#A5B98C' : 'transparent',
+          fg: sel ? '#1a1e1f' : '#EFE7D2',
+          border: sel ? '#EFE7D2' : 'transparent',
+          weight: sel ? '700' : '500',
+          ring: sel ? '4px solid #EFE7D2' : 'none'
+        };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>
