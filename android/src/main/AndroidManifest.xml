@@ -1,19 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<!--
+  The manifest tells Android what this app is made of (activities, permissions) and what it
+  wants to see on the device. Android reads it at install time, before any code runs.
 
-    <!-- "Zugriff auf alle Dateien", nötig um Downloads und Library-Ordner zu verschieben.
-         Wird zur Laufzeit über die Systemeinstellungen freigegeben. -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
+  Permissions: none. The app does not use the network itself (Moonlight does the streaming),
+  so it does not need INTERNET.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Package visibility (Android 11+): an app only "sees" other installed apps that it declares
+      here. Without these entries, PackageManager would report Moonlight and Tailscale as
+      "not installed" even when they are. Declaring a package does not grant any access to it.
+    -->
+    <queries>
+        <!-- Moonlight, official build from Play Store / F-Droid / GitHub. -->
+        <package android:name="com.limelight" />
+        <!-- Tailscale, package name from https://tailscale.com/download/android (Play Store link). -->
+        <package android:name="com.tailscale.ipn" />
+    </queries>
 
     <application
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <!--
+          exported="true": other apps and adb may start this activity. Needed for the home-screen
+          icon, and for ThorBro on the PC to send the stream profile with "adb shell am start"
+          and the string extra profile_b64 (full command: docs/STREAM-PROFILE-ANDROID.md).
+          Note: XML comments must not contain two dashes in a row, so the command is not written here.
+
+          launchMode="singleTop": if the app is already open, a new `am start` is delivered to
+          the running activity (onNewIntent) instead of stacking a second copy on top.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
+            <!-- MAIN + LAUNCHER = show an icon on the home screen / app drawer. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
