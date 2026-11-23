@@ -6,7 +6,7 @@
 
 A small launcher app for the AYN Thor that works together with [ThorBro](https://github.com/catzeyea/ThorBro) on your PC. You send a stream profile from ThorBro to this app, pick a game, and the app starts [Moonlight](https://moonlight-stream.org/) with the right PC and game.
 
-> **Status: early alpha.** The app builds and all 48 unit tests pass, but it has not been tested on a real Thor yet. Expect rough edges.
+> **Status: alpha.** The app builds and the 74 unit tests pass. Stick input and the layout were only checked by hand on a Thor. Expect rough edges. See [Not done yet](#not-done-yet).
 
 ## How it works
 
@@ -31,7 +31,7 @@ The app only checks whether Moonlight and Tailscale are installed and links to t
 Build the debug APK (see below), then:
 
 ```
-adb install -r dist/thorbro-launcher-0.1.0-debug.apk
+adb install -r android/build/outputs/apk/debug/android-debug.apk
 ```
 
 Debug builds are signed with a local debug key. If you build with a different key later, `adb install -r` fails and you have to uninstall the app first.
@@ -39,14 +39,27 @@ Debug builds are signed with a local debug key. If you build with a different ke
 ## Usage
 
 1. Install Moonlight on the Thor and pair it with your Sunshine host once, as described by Moonlight.
-2. In ThorBro on the PC, open **Stream → Stream PC games to your Thor**.
-3. Press **Send to Thor app**. ThorBro sends the profile over adb.
-4. Open the app on the Thor. The **Status** tab shows whether the profile was received or rejected. A rejected profile never replaces the one you already have.
-5. Pick a game in the **Games** tab, or start it from the PC with **Play on Thor**.
+2. In ThorBro on the PC, open **Stream → Stream PC games to your Thor** and press **Send to Thor app**. ThorBro sends the profile over adb.
+3. Open the app on the Thor. A rejected profile never replaces the one you already have; the Stream tab shows why it was rejected.
 
-The **Status** tab also shows the addresses of your PC (LAN and Tailscale). Use them in Moonlight's "Add PC" if the PC is not found automatically.
+### Tabs
 
-Moonlight only streams while it is visible on screen. It cannot stream in the background.
+- **Stream:** the PC from the profile (name, Tailscale and home address, game count) and two steps.
+  - **Open Tailscale** opens the Tailscale app.
+  - **Connect to PC** (shown once a profile exists) starts the profile's `Desktop` entry through Moonlight. If the profile has no `Desktop` entry, it only opens Moonlight.
+  - **Open Moonlight only** opens Moonlight without starting anything.
+- **Games:** the games from the profile. Select one to start it through Moonlight.
+- **Setup:** four static steps (Tailscale, Sunshine, send the profile, pair Moonlight).
+- **About:** app version, whether Moonlight and Tailscale are installed (with download links), profile details and PC addresses for Moonlight's "Add PC", notes, and the font license.
+
+### Controller
+
+- **L1 / R1:** previous / next tab (no wrap-around)
+- **D-pad:** move focus (stick input goes through Compose's focus system)
+- **A:** activate the focused element
+- **B:** closes a sub-page (start error, font license). On a main tab it does nothing, so it never closes the app.
+
+Elements are also focusable and tappable in touch mode. Moonlight only streams while it is visible on screen.
 
 ## Profile format
 
@@ -91,12 +104,21 @@ The repository started as a Kotlin Multiplatform skeleton (`core`, `desktop`, `a
 
 ## Not done yet
 
-- Not tested on a real Thor and not with a real Moonlight pairing
-- No automatic download of Moonlight or Tailscale
+Not verified:
+
+- Stick input and the layout were only tested on the Thor, by hand. Other screen sizes, large font settings and touch-only use are untested.
+- The handoff from ThorBro (`adb install`, `am start` with `profile_b64`) and starting Moonlight with a real pairing are not verified end to end, including a PC id with upper-case letters.
+- Whether `Connect to PC` really lands on the desktop in Moonlight (it depends on a `Desktop` app in Sunshine).
+- Whether the launcher icon, including the monochrome layer, shows correctly in iiSU and other launchers.
+- No lint run yet.
+
+Not implemented:
+
+- No automatic download of Moonlight or Tailscale (links only)
 - No scan of the PC game library and no shortcuts
-- No controller (D-pad) navigation testing
-- No lint run yet
 
 ## License
 
 MIT, see `LICENSE`. This app does not contain code from Moonlight or Sunshine. It only starts Moonlight through its public shortcut activity.
+
+Credits: [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (SIL Open Font License 1.1), see `THIRD-PARTY-NOTICES.txt`.
