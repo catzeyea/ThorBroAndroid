@@ -17,6 +17,19 @@ class ProfileStore(directory: File) {
     private val file = File(directory, "stream-profile.json")
 
     /**
+     * Validates a profile received as base64 and saves it only if it is valid. A rejected profile
+     * never touches the saved one, so the previous profile stays in place.
+     *
+     * @throws IOException if the profile was valid but could not be written.
+     */
+    @Throws(IOException::class)
+    fun importBase64(encoded: String): ParseResult {
+        val result = ProfileParser.parseBase64(encoded)
+        if (result is ParseResult.Success) save(result.json)
+        return result
+    }
+
+    /**
      * Saves the JSON text. It is written to a temporary file first and then renamed, so a crash
      * while writing never leaves a half-written profile behind.
      */
@@ -32,7 +45,7 @@ class ProfileStore(directory: File) {
 
     /**
      * Loads and re-validates the saved profile. Returns null if there is none, or if it can no
-     * longer be read (for example after an app update that dropped an old format).
+     * longer be read (for example a profile saved by an older app version in an earlier format).
      */
     fun load(): StoredProfile? {
         if (!file.isFile) return null

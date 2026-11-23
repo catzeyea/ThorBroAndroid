@@ -1,10 +1,7 @@
 package dev.catzeyea.thorbro.android.launch
 
-import dev.catzeyea.thorbro.android.profile.StreamGame
-import dev.catzeyea.thorbro.android.profile.StreamHost
+import dev.catzeyea.thorbro.android.profile.StreamPc
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -13,11 +10,18 @@ import org.junit.Test
  */
 class MoonlightLaunchRequestTest {
 
-    private val host = StreamHost(uuid = "0123abcd-4567-89ef-0123-456789abcdef", name = "Gaming-PC")
+    private val pc = StreamPc(
+        name = "my-pc",
+        uniqueid = "0123ABCD-4567-89EF-0123-456789ABCDEF",
+        lanAddress = "192.168.1.20",
+        tailscaleAddress = "100.101.102.103",
+        tailscaleName = "my-pc.tail1234.ts.net",
+        sunshinePort = 47989,
+    )
 
     @Test
     fun `targets the exported Moonlight trampoline with action VIEW`() {
-        val request = MoonlightLauncher.buildRequest(host, StreamGame("Desktop", appId = null, hdr = false))
+        val request = MoonlightLauncher.buildRequest(pc, "Desktop")
 
         assertEquals("com.limelight", request.packageName)
         assertEquals("com.limelight.ShortcutTrampoline", request.className)
@@ -26,43 +30,39 @@ class MoonlightLaunchRequestTest {
 
     @Test
     fun `starts Moonlight in a new task`() {
-        val request = MoonlightLauncher.buildRequest(host, StreamGame("Desktop", appId = null, hdr = false))
+        val request = MoonlightLauncher.buildRequest(pc, "Desktop")
         val flagActivityNewTask = 0x10000000 // value of Intent.FLAG_ACTIVITY_NEW_TASK
         assertEquals(flagActivityNewTask, request.flags and flagActivityNewTask)
     }
 
     @Test
-    fun `UUID and AppName are passed as strings`() {
-        val request = MoonlightLauncher.buildRequest(host, StreamGame("Desktop", appId = null, hdr = false))
+    fun `sends exactly UUID and AppName as string extras`() {
+        val request = MoonlightLauncher.buildRequest(pc, "Steam Big Picture")
 
-        assertEquals(host.uuid, request.stringExtras["UUID"])
-        assertEquals("Desktop", request.stringExtras["AppName"])
-        assertFalse("AppId must be absent when the profile has none", request.stringExtras.containsKey("AppId"))
+        // No name, addresses, port, AppId or HDR: the PC format has only these two values for Moonlight.
+        assertEquals(
+            mapOf("UUID" to "0123ABCD-4567-89EF-0123-456789ABCDEF", "AppName" to "Steam Big Picture"),
+            request.stringExtras,
+        )
     }
 
     @Test
-    fun `AppId is passed as a String extra when present`() {
-        val request = MoonlightLauncher.buildRequest(host, StreamGame("Elden Ring", appId = "881448767", hdr = false))
-
-        // Moonlight reads AppId with getStringExtra(); it must be in the String map, not anywhere else.
-        assertEquals("881448767", request.stringExtras["AppId"])
-        assertFalse(request.booleanExtras.containsKey("AppId"))
+    fun `uniqueid is passed unchanged in lower case too`() {
+        val lowerPc = pc.copy(uniqueid = "0123abcd-4567-89ef-0123-456789abcdef")
+        assertEquals("0123abcd-4567-89ef-0123-456789abcdef", MoonlightLauncher.buildRequest(lowerPc, "Desktop").stringExtras["UUID"])
     }
 
     @Test
-    fun `HDR is a boolean extra and only sent when true`() {
-        val withHdr = MoonlightLauncher.buildRequest(host, StreamGame("Steam", appId = null, hdr = true))
-        val withoutHdr = MoonlightLauncher.buildRequest(host, StreamGame("Steam", appId = null, hdr = false))
-
-        assertEquals(mapOf("HDR" to true), withHdr.booleanExtras)
-        assertFalse(withHdr.stringExtras.containsKey("HDR"))
-        assertTrue(withoutHdr.booleanExtras.isEmpty())
+    fun `game name is passed exactly, including unicode, quotes, case and spaces`() {
+        for (name in listOf("Tom's \"Game\"", "Ünïcödé – 2", " steam big picture ", "ファイナルファンタジー")) {
+            assertEquals(name, MoonlightLauncher.buildRequest(pc, name).stringExtras["AppName"])
+        }
     }
 
     @Test
-    fun `host name is not sent to Moonlight`() {
-        val request = MoonlightLauncher.buildRequest(host, StreamGame("Desktop", appId = null, hdr = false))
-        assertFalse(request.stringExtras.containsKey("Name"))
-        assertEquals(setOf("UUID", "AppName"), request.stringExtras.keys)
+    fun `address for Moonlight's Add PC gets the port only when it is not the default`() {
+        assertEquals("192.168.1.20", pc.addressForMoonlight("192.168.1.20"))
+        assertEquals("192.168.1.20", pc.copy(sunshinePort = null).addressForMoonlight("192.168.1.20"))
+        assertEquals("192.168.1.20:48000", pc.copy(sunshinePort = 48000).addressForMoonlight("192.168.1.20"))
     }
 }

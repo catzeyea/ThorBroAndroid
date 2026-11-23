@@ -2,14 +2,13 @@ package dev.catzeyea.thorbro.android.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -19,13 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.catzeyea.thorbro.android.profile.StoredProfile
-import dev.catzeyea.thorbro.android.profile.StreamGame
 
 @Composable
 fun GamesScreen(
     storedProfile: StoredProfile?,
     moonlightInstalled: Boolean,
-    onLaunchGame: (StreamGame) -> Unit,
+    onLaunchGame: (gameName: String) -> Unit,
 ) {
     val profile = storedProfile?.profile
     if (profile == null || profile.games.isEmpty()) {
@@ -48,30 +46,28 @@ fun GamesScreen(
     ) {
         item {
             Text(
-                "Streaming from ${profile.host.name ?: profile.host.uuid}",
+                "Streaming from ${profile.pc.displayName}",
                 style = MaterialTheme.typography.titleMedium,
             )
             if (!moonlightInstalled) {
                 Text("Moonlight is not installed, see the Status tab.", color = MaterialTheme.colorScheme.error)
             }
         }
-        itemsIndexed(profile.games) { _, game ->
-            GameRow(game, onPlay = { onLaunchGame(game) })
+        // No item keys: Sunshine could have two apps with the same name, and keys must be unique.
+        items(profile.games) { gameName ->
+            GameRow(gameName, onPlay = { onLaunchGame(gameName) })
         }
     }
 }
 
 @Composable
-private fun GameRow(game: StreamGame, onPlay: () -> Unit) {
+private fun GameRow(gameName: String, onPlay: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(game.name, style = MaterialTheme.typography.titleMedium)
-                if (game.hdr) Text("HDR", style = MaterialTheme.typography.labelSmall)
-            }
+            Text(gameName, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             Button(onClick = onPlay) { Text("Play") }
         }
     }

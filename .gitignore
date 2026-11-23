@@ -20,3 +20,6 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local build toolchain (JDK, Android SDK, Gradle home)
+.toolchain/

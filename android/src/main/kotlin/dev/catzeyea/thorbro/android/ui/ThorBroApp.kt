@@ -21,7 +21,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.catzeyea.thorbro.android.apps.InstalledApp
 import dev.catzeyea.thorbro.android.profile.StoredProfile
-import dev.catzeyea.thorbro.android.profile.StreamGame
 
 /** A short message about the last profile handoff (success or error). */
 data class ImportMessage(val isError: Boolean, val text: String)
@@ -45,7 +44,7 @@ private enum class AppTab(val title: String) { Status("Status"), Games("Games"),
 @Composable
 fun ThorBroApp(
     state: AppUiState,
-    onLaunchGame: (StreamGame) -> Unit,
+    onLaunchGame: (gameName: String) -> Unit,
     onOpenUrl: (String) -> Unit,
     onDismissLaunchError: () -> Unit,
 ) {

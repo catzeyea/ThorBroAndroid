@@ -17,9 +17,7 @@ import dev.catzeyea.thorbro.android.apps.checkInstalled
 import dev.catzeyea.thorbro.android.launch.LaunchOutcome
 import dev.catzeyea.thorbro.android.launch.MoonlightLauncher
 import dev.catzeyea.thorbro.android.profile.ParseResult
-import dev.catzeyea.thorbro.android.profile.ProfileParser
 import dev.catzeyea.thorbro.android.profile.ProfileStore
-import dev.catzeyea.thorbro.android.profile.StreamGame
 import dev.catzeyea.thorbro.android.ui.AppUiState
 import dev.catzeyea.thorbro.android.ui.ImportMessage
 import dev.catzeyea.thorbro.android.ui.ThorBroApp
@@ -98,26 +96,28 @@ class MainActivity : ComponentActivity() {
         // Remove the extra, so the same profile is not imported again later from this Intent.
         intent.removeExtra(EXTRA_PROFILE_B64)
 
-        val message = when (val result = ProfileParser.parseBase64(encoded)) {
-            is ParseResult.Failure ->
-                ImportMessage(isError = true, text = "Profile rejected: ${result.message} The previous profile was kept.")
-            is ParseResult.Success -> try {
-                profileStore.save(result.json)
-                val profile = result.profile
-                ImportMessage(
-                    isError = false,
-                    text = "Profile received: ${profile.games.size} games from ${profile.host.name ?: profile.host.uuid}.",
-                )
-            } catch (e: IOException) {
-                ImportMessage(isError = true, text = "The profile was valid but could not be saved: ${e.message}")
+        // importBase64 saves only a valid profile; a rejected one leaves the saved profile untouched.
+        val message = try {
+            when (val result = profileStore.importBase64(encoded)) {
+                is ParseResult.Failure ->
+                    ImportMessage(isError = true, text = "Profile rejected: ${result.message} The previous profile was kept.")
+                is ParseResult.Success -> {
+                    val profile = result.profile
+                    ImportMessage(
+                        isError = false,
+                        text = "Profile received: ${profile.games.size} games from ${profile.pc.displayName}.",
+                    )
+                }
             }
+        } catch (e: IOException) {
+            ImportMessage(isError = true, text = "The profile was valid but could not be saved: ${e.message}")
         }
         uiState = uiState.copy(storedProfile = profileStore.load(), importMessage = message)
     }
 
-    private fun launchGame(game: StreamGame) {
-        val host = uiState.storedProfile?.profile?.host ?: return
-        when (val outcome = MoonlightLauncher.launch(this, host, game)) {
+    private fun launchGame(gameName: String) {
+        val pc = uiState.storedProfile?.profile?.pc ?: return
+        when (val outcome = MoonlightLauncher.launch(this, pc, gameName)) {
             LaunchOutcome.Started -> Unit // Moonlight takes over the screen from here.
             is LaunchOutcome.Failed -> uiState = uiState.copy(launchError = outcome.message)
         }

@@ -5,8 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import dev.catzeyea.thorbro.android.apps.KnownApps
-import dev.catzeyea.thorbro.android.profile.StreamGame
-import dev.catzeyea.thorbro.android.profile.StreamHost
+import dev.catzeyea.thorbro.android.profile.StreamPc
 
 /**
  * Names that Moonlight's code expects. Source: moonlight-android, ShortcutTrampoline.java and
@@ -20,8 +19,6 @@ object Moonlight {
 
     const val EXTRA_UUID = "UUID"
     const val EXTRA_APP_NAME = "AppName"
-    const val EXTRA_APP_ID = "AppId"
-    const val EXTRA_HDR = "HDR"
 }
 
 /**
@@ -36,7 +33,6 @@ data class LaunchRequest(
     val action: String,
     val flags: Int,
     val stringExtras: Map<String, String>,
-    val booleanExtras: Map<String, Boolean>,
 ) {
     /**
      * An *explicit* Intent: it names the exact target component (package + class), so Android
@@ -45,8 +41,8 @@ data class LaunchRequest(
     fun toIntent(): Intent = Intent(action).apply {
         component = ComponentName(packageName, className)
         addFlags(flags)
+        // putExtra(String, String): Moonlight reads both extras with getStringExtra().
         stringExtras.forEach { (key, value) -> putExtra(key, value) }
-        booleanExtras.forEach { (key, value) -> putExtra(key, value) }
     }
 }
 
@@ -58,17 +54,16 @@ sealed interface LaunchOutcome {
 
 object MoonlightLauncher {
 
-    /** Builds the same Intent shape that Moonlight's own pinned shortcuts use. */
-    fun buildRequest(host: StreamHost, game: StreamGame): LaunchRequest {
+    /**
+     * Builds the same Intent shape that Moonlight's own pinned shortcuts use, with the two extras from
+     * the stream profile: `UUID` = pc.uniqueid and `AppName` = the game name, both unchanged.
+     */
+    fun buildRequest(pc: StreamPc, gameName: String): LaunchRequest {
         val strings = linkedMapOf(
-            Moonlight.EXTRA_UUID to host.uuid,
-            Moonlight.EXTRA_APP_NAME to game.name,
+            Moonlight.EXTRA_UUID to pc.uniqueid,
+            // Moonlight compares AppName exactly (String.equals) with its cached app list.
+            Moonlight.EXTRA_APP_NAME to gameName,
         )
-        // AppId must be a String: Moonlight reads it with getStringExtra(). An Int extra would be ignored.
-        game.appId?.let { strings[Moonlight.EXTRA_APP_ID] = it }
-
-        // Moonlight reads HDR with getBooleanExtra("HDR", false), so it is only sent when true.
-        val booleans = if (game.hdr) mapOf(Moonlight.EXTRA_HDR to true) else emptyMap()
 
         return LaunchRequest(
             packageName = Moonlight.PACKAGE,
@@ -79,7 +74,6 @@ object MoonlightLauncher {
             // separate entry in "recent apps" and Back inside Moonlight does not land in our app's history.
             flags = Intent.FLAG_ACTIVITY_NEW_TASK,
             stringExtras = strings,
-            booleanExtras = booleans,
         )
     }
 
@@ -91,8 +85,8 @@ object MoonlightLauncher {
      * for example: the PC is not paired, the PC is offline, or another game is already running on the PC
      * (Moonlight asks whether to quit it). The stream also stops as soon as Moonlight is no longer visible.
      */
-    fun launch(context: Context, host: StreamHost, game: StreamGame): LaunchOutcome {
-        val intent = buildRequest(host, game).toIntent()
+    fun launch(context: Context, pc: StreamPc, gameName: String): LaunchOutcome {
+        val intent = buildRequest(pc, gameName).toIntent()
         return try {
             context.startActivity(intent)
             LaunchOutcome.Started

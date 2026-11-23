@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 import java.util.Base64
 
@@ -19,12 +18,17 @@ sealed interface ParseResult {
 }
 
 /**
- * Reads and validates the stream profile JSON.
+ * Reads and validates the stream profile JSON that ThorBro (PC) builds.
+ * Format: docs/STREAM-PROFILE.md in the ThorBro repo (format "thorbro.stream-profile", version 1).
+ * Unknown fields are ignored, as that doc requires.
  *
  * Pure Kotlin on purpose (no android.* classes), so it runs in local unit tests on the PC.
  * That is also why java.util.Base64 is used instead of android.util.Base64.
  */
 object ProfileParser {
+
+    /** Value of the "format" field. Anything else is not a ThorBro stream profile. */
+    const val FORMAT = "thorbro.stream-profile"
 
     const val SUPPORTED_VERSION = 1
 
@@ -39,8 +43,6 @@ object ProfileParser {
     /** Same layout that java.util.UUID prints: 8-4-4-4-12 hex digits. */
     private val UUID_PATTERN =
         Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
-    private val DIGITS_PATTERN = Regex("^[0-9]{1,10}$")
 
     /** Decodes the base64 text from the `profile_b64` extra, then parses it. */
     fun parseBase64(encoded: String): ParseResult {
@@ -84,7 +86,14 @@ object ProfileParser {
         }
         if (root !is JsonObject) fail("The profile must be a JSON object.")
 
-        // Check the version first, so a future format gets a clear "unsupported version"
+        // "format" first: it tells a stream profile apart from any other JSON.
+        val format = root.optionalString("format", "\"format\"")
+            ?: fail("This is not a ThorBro stream profile: the \"format\" field is missing.")
+        if (format != FORMAT) {
+            fail("This is not a ThorBro stream profile: \"format\" is \"${format.take(60)}\", expected \"$FORMAT\".")
+        }
+
+        // Then the version, so a future format gets a clear "unsupported version"
         // message instead of a confusing error about some field.
         val version = root.requireWholeNumber("version")
         if (version != SUPPORTED_VERSION.toLong()) {
@@ -98,59 +107,51 @@ object ProfileParser {
             fail("The profile contains the field \"$key\". Profiles must not contain credentials.")
         }
 
-        val hostObject = root["host"] as? JsonObject ?: fail("The profile has no \"host\" object.")
-        val host = readHost(hostObject)
+        val pcObject = root["pc"] as? JsonObject ?: fail("The profile has no \"pc\" object.")
+        val pc = readPc(pcObject)
 
         val gamesArray = root["games"] as? JsonArray ?: fail("The profile has no \"games\" list.")
         val games = gamesArray.mapIndexed { index, element -> readGame(element, index) }
 
-        return StreamProfile(
-            version = version.toInt(),
-            host = host,
-            games = games,
-            createdBy = root.optionalString("createdBy", "createdBy"),
+        return StreamProfile(version = version.toInt(), pc = pc, games = games)
+    }
+
+    private fun readPc(obj: JsonObject): StreamPc {
+        val uniqueid = obj.optionalString("uniqueid", "pc.uniqueid") ?: fail("\"pc.uniqueid\" is missing.")
+        // Upper and lower case are both fine. The value is kept as it is, because Moonlight
+        // stores Sunshine's uniqueid unchanged and looks the PC up with it.
+        if (!UUID_PATTERN.matches(uniqueid)) {
+            fail("\"pc.uniqueid\" is not a valid UUID: \"${uniqueid.take(60)}\". Use Sunshine's uniqueid from /serverinfo.")
+        }
+        return StreamPc(
+            // May be empty (Sunshine reported no hostname); the UI then shows the uniqueid.
+            name = obj.optionalString("name", "pc.name") ?: "",
+            uniqueid = uniqueid,
+            // Addresses are only hints; a blank value means the same as null.
+            lanAddress = obj.optionalString("lan_address", "pc.lan_address")?.takeIf { it.isNotBlank() },
+            tailscaleAddress = obj.optionalString("tailscale_address", "pc.tailscale_address")?.takeIf { it.isNotBlank() },
+            tailscaleName = obj.optionalString("tailscale_name", "pc.tailscale_name")?.takeIf { it.isNotBlank() },
+            sunshinePort = readOptionalPort(obj["sunshine_port"], "pc.sunshine_port"),
         )
     }
 
-    private fun readHost(obj: JsonObject): StreamHost {
-        val uuid = obj.optionalString("uuid", "host.uuid") ?: fail("\"host.uuid\" is missing.")
-        if (!UUID_PATTERN.matches(uuid)) {
-            fail("\"host.uuid\" is not a valid UUID: \"$uuid\". Use Sunshine's uniqueid from /serverinfo.")
-        }
-        return StreamHost(uuid = uuid, name = obj.optionalString("name", "host.name")?.takeIf { it.isNotBlank() })
-    }
-
-    private fun readGame(element: JsonElement, index: Int): StreamGame {
+    /** A game is a plain string: Sunshine's app name, kept exactly (no trimming, Moonlight matches it exactly). */
+    private fun readGame(element: JsonElement, index: Int): String {
         val where = "games[$index]"
-        val obj = element as? JsonObject ?: fail("$where must be an object.")
-        val name = obj.optionalString("name", "$where.name")
-        if (name.isNullOrBlank()) fail("$where.name is missing or empty.")
-        return StreamGame(
-            name = name,
-            appId = readAppId(obj["appId"], "$where.appId"),
-            hdr = readOptionalBoolean(obj["hdr"], "$where.hdr") ?: false,
-        )
+        val primitive = element as? JsonPrimitive
+        if (primitive == null || !primitive.isString) fail("$where must be a string (the app name in Sunshine).")
+        val name = primitive.content
+        if (name.isBlank()) fail("$where is empty. Every game needs its app name from Sunshine.")
+        return name
     }
 
-    /**
-     * Moonlight wants AppId as a String (it calls getStringExtra + Integer.parseInt).
-     * Accept a digit string or a JSON integer and always return a String.
-     */
-    private fun readAppId(element: JsonElement?, where: String): String? {
-        if (element == null || element is JsonNull) return null
-        val primitive = element as? JsonPrimitive ?: fail("$where must be a string of digits.")
-        val text = if (primitive.isString) primitive.content else primitive.longOrNull?.toString()
-        if (text == null || !DIGITS_PATTERN.matches(text) || text.toLong() > Int.MAX_VALUE) {
-            fail("$where must be a whole number between 0 and ${Int.MAX_VALUE}, given as a string.")
-        }
-        return text
-    }
-
-    private fun readOptionalBoolean(element: JsonElement?, where: String): Boolean? {
+    private fun readOptionalPort(element: JsonElement?, where: String): Int? {
         if (element == null || element is JsonNull) return null
         val primitive = element as? JsonPrimitive
-        if (primitive == null || primitive.isString) fail("$where must be true or false.")
-        return primitive.booleanOrNull ?: fail("$where must be true or false.")
+        if (primitive == null || primitive.isString) fail("$where must be a number.")
+        val port = primitive.longOrNull ?: fail("$where must be a whole number.")
+        if (port !in 1L..65535L) fail("$where must be between 1 and 65535, not $port.")
+        return port.toInt()
     }
 
     private fun JsonObject.requireWholeNumber(key: String): Long {

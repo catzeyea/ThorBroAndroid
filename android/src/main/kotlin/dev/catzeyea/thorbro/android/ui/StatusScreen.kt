@@ -15,10 +15,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.catzeyea.thorbro.android.apps.InstalledApp
 import dev.catzeyea.thorbro.android.apps.KnownApps
+import dev.catzeyea.thorbro.android.profile.StreamPc
 import java.text.DateFormat
 import java.util.Date
 
@@ -94,11 +96,34 @@ private fun ProfileCard(state: AppUiState) {
             val profile = stored.profile
             val receivedAt = DateFormat.getDateTimeInstance().format(Date(stored.receivedAtMillis))
             Text("Last received: $receivedAt")
-            Text("PC: ${profile.host.name ?: "(no name)"}")
-            Text("Host UUID: ${profile.host.uuid}", style = MaterialTheme.typography.bodySmall)
+            val pc = profile.pc
+            Text("PC: ${pc.name.ifBlank { "(no name)" }}")
+            Text("Host UUID: ${pc.uniqueid}", style = MaterialTheme.typography.bodySmall)
             Text("Games: ${profile.games.size}")
-            profile.createdBy?.let { Text("Created by: $it", style = MaterialTheme.typography.bodySmall) }
+            PcAddresses(pc)
         }
+    }
+}
+
+/**
+ * The PC's addresses from the profile. They are only hints for adding the PC in Moonlight by hand
+ * (Moonlight usually finds the PC on the LAN by itself); the PC is identified by its UUID.
+ */
+@Composable
+private fun PcAddresses(pc: StreamPc) {
+    val addresses = listOfNotNull(
+        pc.lanAddress?.let { "LAN" to it },
+        pc.tailscaleName?.let { "Tailscale name" to it },
+        pc.tailscaleAddress?.let { "Tailscale IP" to it },
+    )
+    if (addresses.isEmpty()) return
+    Text("If Moonlight does not find the PC, add it there with:", style = MaterialTheme.typography.bodySmall)
+    addresses.forEach { (label, address) ->
+        Text(
+            "$label: ${pc.addressForMoonlight(address)}",
+            fontFamily = FontFamily.Monospace,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
