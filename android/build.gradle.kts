@@ -32,6 +32,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Signed with the local debug key so assembleRelease gives an installable APK that updates
+            // a debug install in place (same key, stored profile kept). A real release key needs a
+            // one-time uninstall, because Android refuses updates signed with a different key.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

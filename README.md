@@ -28,13 +28,16 @@ The app only checks whether Moonlight and Tailscale are installed and links to t
 
 ## Install
 
-Build the debug APK (see below), then:
+Build the release APK (see below), then install it and compile it right away:
 
 ```
-adb install -r android/build/outputs/apk/debug/android-debug.apk
+adb install -r android/build/outputs/apk/release/android-release.apk
+adb shell cmd package compile -m speed-profile -f dev.catzeyea.thorbro
 ```
 
-Debug builds are signed with a local debug key. If you build with a different key later, `adb install -r` fails and you have to uninstall the app first.
+Run the compile command after every install: a freshly installed app runs uncompiled, and tab switches stutter until Android compiles it, which otherwise only happens later in the background.
+
+Release builds are signed with the local debug key, like debug builds, so the release APK installs over a debug install and keeps the stored profile. Switching to a real release key later needs a one-time `adb uninstall dev.catzeyea.thorbro` first (this deletes the stored profile, so send it again from ThorBro). Debug builds are noticeably slower and only meant for development.
 
 ## Usage
 
@@ -93,8 +96,10 @@ You need JDK 17 and the Android SDK (platform 36 and matching build tools). Set 
 
 ```
 ./gradlew :android:testDebugUnitTest
-./gradlew :android:assembleDebug
+./gradlew :android:assembleRelease
 ```
+
+`./gradlew :android:assembleDebug` builds the slower debug APK for development.
 
 - Application id: `dev.catzeyea.thorbro`
 - minSdk 33 (Android 13), compileSdk and targetSdk 36
