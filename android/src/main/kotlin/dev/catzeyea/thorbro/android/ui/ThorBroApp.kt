@@ -222,17 +222,35 @@ private fun hintsFor(tab: AppTab, subScreen: SubScreen?, controllers: Controller
         null -> when (tab) {
             AppTab.Start -> listOf(Hint(Y, "Menu"), switchTab)
             AppTab.Files -> listOf(Hint(A, "Open"), Hint(B, "Back"), Hint(X, "Scan this folder"), Hint(SELECT, "Pin or folder options"), switchTab)
-            AppTab.Saves -> listOf(Hint(A, "Back up"), Hint(X, "Restore"), Hint(Y, "Menu"), switchTab)
+            AppTab.Saves -> listOf(Hint(A, "Open game"), Hint(Y, "Menu"), switchTab)
             AppTab.Stream -> listOf(Hint(A, "Select"), Hint(Y, "Menu"), switchTab)
         }
         SubScreen.Menu -> listOf(Hint(A, "Open"), Hint(B, "Close"))
         SubScreen.Scan -> when (controllers.files.scan) {
-            is ScanState.Preview -> listOf(Hint(A, "Move"), Hint(B, "Cancel"))
+            is ScanState.Preview -> {
+                val scan = controllers.files.scan as ScanState.Preview
+                when {
+                    // "A Move" only when something can move.
+                    controllers.files.previewFocusOnRow -> listOf(Hint(A, "Switch file on/off"), Hint(B, "Cancel"))
+                    scan.selected.isNotEmpty() -> listOf(Hint(A, "Move"), Hint(B, "Cancel"))
+                    else -> listOf(Hint(A, "Close"), Hint(B, "Close"))
+                }
+            }
             is ScanState.Moving -> listOf(Hint(B, "Stop after this file"))
             is ScanState.Done -> listOf(Hint(A, "Select"), Hint(B, "Close"))
             else -> listOf(Hint(B, "Close"))
         }
         is SubScreen.ConfirmRestore -> listOf(Hint(A, "Select"), Hint(B, "Cancel"))
+        is SubScreen.SaveGame -> {
+            val save = controllers.saves.byKey(subScreen.saveKey)
+            if (save != null && save.emulator.canRestore && save.backups.isNotEmpty()) {
+                listOf(Hint(A, "Back up"), Hint(X, "Restore selected"), Hint(B, "Back"))
+            } else {
+                listOf(Hint(A, "Back up"), Hint(B, "Back"))
+            }
+        }
+        is SubScreen.ScanInfo -> listOf(Hint(A, "Scan"), Hint(B, "Cancel"), Hint(SELECT, "Don't show this again"))
+        SubScreen.Help -> listOf(Hint(B, "Back"))
         else -> listOf(Hint(A, "Select"), Hint(B, "Back"))
     }
 }
@@ -368,5 +386,6 @@ private fun MenuOverlay(entry: FocusRequester, actions: AppActions, modifier: Mo
         Text("menu", style = ThorType.label(), modifier = Modifier.padding(start = 8.du, bottom = 4.du))
         ListRow("Setup", onActivate = { actions.onCloseSubScreen(); actions.onOpenSubScreen(SubScreen.Setup) }, modifier = Modifier.focusRequester(entry))
         ListRow("About", onActivate = { actions.onCloseSubScreen(); actions.onOpenSubScreen(SubScreen.About) })
+        ListRow("How it works", onActivate = { actions.onCloseSubScreen(); actions.onOpenSubScreen(SubScreen.Help) })
     }
 }

@@ -58,11 +58,19 @@ object Classifier {
     /** Switch title ID from a file name, uppercase. */
     fun switchId(name: String): String? = TITLE_ID.find(name)?.groupValues?.get(1)?.uppercase()
 
-    fun switchKind(titleId: String): SwitchKind = when {
+    /**
+     * Game, update or DLC by the title ID. A file tagged `[BASE]` in [name] is a base game even
+     * with another ID (as in the PC app's ids.rs): on the Thor,
+     * `The Legend of Zelda Breath of the Wild [01007EF00011E800][BASE][v1.5.0].xci` is the base game.
+     */
+    fun switchKind(titleId: String, name: String = ""): SwitchKind = when {
         titleId.endsWith("000") -> SwitchKind.Game
+        isTaggedBase(name) -> SwitchKind.Game
         titleId.endsWith("800") -> SwitchKind.Update
         else -> SwitchKind.Dlc
     }
+
+    fun isTaggedBase(name: String): Boolean = name.contains("[BASE]", ignoreCase = true)
 
     /** The file that is examined: the file itself, or for a .zip the largest file inside (by name only). */
     private data class Probe(val file: File, val name: String, val ext: String, val archiveExt: String, val via: String)
@@ -111,7 +119,8 @@ object Classifier {
         val switch = lib.folderFor("switch") ?: return null
         if (!(isSwitchExt || candidates.isEmpty())) return null
         val tail = titleId.takeLast(4)
-        return when (val kind = switchKind(titleId)) {
+        val tagged = if (switchId(name) != null) name else probe.name
+        return when (val kind = switchKind(titleId, tagged)) {
             SwitchKind.Game -> Guess(switch, "", "Switch game (title ID …$tail)", listOf(switch), true, kind)
             else -> {
                 val what = if (kind == SwitchKind.Update) "Update" else "DLC"

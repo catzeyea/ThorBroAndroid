@@ -74,18 +74,59 @@ class ScanPlannerTest {
     }
 
     @Test
-    fun `7z, rar, zips that need extracting, folders and unsure guesses stay in Review`() {
+    fun `7z, rar, zips that need extracting and folders stay in Review`() {
         val lib = TestFiles.library(tmp.newFolder("sd"))
         val dl = tmp.newFolder("Download")
         TestFiles.file(dl, "TLOZ-BOTW-_Update160_.rar")
         TestFiles.file(dl, "pack.7z")
         TestFiles.zip(dl, "BotW (Update)_01007EF00011E800__US_.zip", mapOf("update.nsp" to 100))
         File(dl, "Some folder").mkdirs()
-        TestFiles.file(dl, "Rom.zip") // .zip fits gba and others without a header: unsure
         val result = plan(dl, lib)
         result.items.forEach { assertEquals(it.file.name, ScanGroup.Review, it.group) }
         assertTrue(result.item("BotW (Update)_01007EF00011E800__US_.zip").reason.contains("extract"))
         assertTrue(result.item("Some folder").reason.startsWith("Folder"))
+    }
+
+    @Test
+    fun `an unsure guess can move but starts switched off, sure guesses start on`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "Rom.zip") // .zip fits gba and snes, no readable inner file: unsure
+        TestFiles.file(dl, "Celeste [0100ABCD12345000].nsp")
+        val result = plan(dl, lib)
+        val unsure = result.item("Rom.zip")
+        assertEquals(ScanGroup.Games, unsure.group)
+        assertEquals(File(lib.path, "Game Boy Advance"), unsure.target) // the one that already has games
+        assertTrue(!unsure.onByDefault)
+        assertTrue(result.item("Celeste [0100ABCD12345000].nsp").onByDefault)
+        assertEquals(setOf(File(dl, "Celeste [0100ABCD12345000].nsp")), result.defaultSelection)
+        assertEquals(2, result.toMove.size)
+    }
+
+    @Test
+    fun `Java apps are never sorted`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val roms = File(lib.path.parentFile, "ROMs")
+        TestFiles.file(File(roms, "j2me"), "systeminfo.txt", "Full system name:\nJ2ME\n\nSupported file extensions:\n.jar .JAR\n".toByteArray())
+        val withJ2me = Libraries.read(roms, "x")!!
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "aynthor_secondscreen_v1_21-1.0.1.jar")
+        TestFiles.file(dl, "game.jad")
+        val result = plan(dl, withJ2me)
+        result.items.forEach {
+            assertEquals(ScanGroup.Review, it.group)
+            assertEquals("Java app: not sorted", it.reason)
+        }
+    }
+
+    @Test
+    fun `a base game tagged BASE goes to the switch folder, not to updates`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "The Legend of Zelda Breath of the Wild [01007EF00011E800][BASE][v1.5.0].xci")
+        val item = plan(dl, lib).items.single()
+        assertEquals(ScanGroup.Games, item.group)
+        assertEquals(File(lib.path, "switch"), item.target)
     }
 
     @Test
@@ -99,10 +140,14 @@ class ScanPlannerTest {
     }
 
     @Test
-    fun `a file that is already in its target folder is not moved again`() {
+    fun `a file that is already in its target folder is listed as already in place`() {
         val lib = TestFiles.library(tmp.newFolder("sd"), switchGames = 1)
         val result = plan(File(lib.path, "switch"), lib)
         assertTrue(result.toMove.isEmpty())
-        assertTrue(result.items.first { it.file.name.endsWith(".nsp") }.reason.startsWith("Already in"))
+        val nsp = result.items.first { it.file.name.endsWith(".nsp") }
+        assertEquals(ScanGroup.InPlace, nsp.group)
+        assertEquals("Already in Nintendo Switch", nsp.reason)
+        assertEquals(1, result.group(ScanGroup.InPlace).size)
+        assertTrue(result.group(ScanGroup.Review).none { it.file.name.endsWith(".nsp") })
     }
 }

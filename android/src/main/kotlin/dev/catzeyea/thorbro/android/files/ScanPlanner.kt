@@ -8,6 +8,9 @@ enum class ScanGroup(val title: String) {
     Updates("Updates"),
     Dlc("DLC"),
 
+    /** Recognized, and already in the folder it belongs in: nothing to do. */
+    InPlace("Already in place"),
+
     /** Unclear: stays where it is, nothing is moved. */
     Review("Unclear"),
 
@@ -21,10 +24,15 @@ data class ScanItem(
     /** Last modified time when scanned; the move is skipped if the file changed since. */
     val modified: Long,
     val group: ScanGroup,
-    /** Target folder for moved groups, null for Review / Skipped. */
+    /** Target folder for moved groups, null for Review / Skipped / InPlace. */
     val target: File?,
     /** Short explanation shown in the preview. */
     val reason: String,
+    /**
+     * Switched on in the preview at first. Sure guesses start on; an unsure guess (several systems
+     * would fit) can be moved too, but starts off.
+     */
+    val onByDefault: Boolean = target != null,
 )
 
 data class ScanResult(
@@ -32,7 +40,11 @@ data class ScanResult(
     val library: GameLibrary?,
     val items: List<ScanItem>,
 ) {
+    /** Files that can be moved (each one can be switched on or off in the preview). */
     val toMove: List<ScanItem> get() = items.filter { it.target != null }
+
+    /** The files switched on at first. */
+    val defaultSelection: Set<File> get() = toMove.filter { it.onByDefault }.map { it.file }.toSet()
     fun group(group: ScanGroup): List<ScanItem> = items.filter { it.group == group }
 }
 
@@ -43,8 +55,10 @@ data class ScanResult(
  *   listed in Review.
  * - Unfinished downloads (by name, or a size/time change while scanning) are skipped.
  * - Saves, cheats, APKs and firmware are not guessed: they go to Review.
- * - Games, updates and DLC use [Classifier] (the PC rules). Only sure guesses are moved; an unsure
- *   guess goes to Review with the guess as hint.
+ * - Java apps (.jar, .jad) are not guessed either (ES-DE's j2me takes .jar, but most are tools).
+ * - Games, updates and DLC use [Classifier] (the PC rules). Sure guesses start switched on in the
+ *   preview; an unsure guess (several systems fit) gets its best target but starts switched off.
+ * - Files that are already in the folder they belong in are listed as "Already in place".
  * - .7z and .rar go to Review; a .zip only moves if the target system reads it packed.
  */
 object ScanPlanner {
@@ -55,6 +69,7 @@ object ScanPlanner {
     private val APK_EXTS = setOf(".apk", ".apks", ".xapk", ".apkm")
     private val SAVE_EXTS = setOf(".sav", ".srm", ".dsv", ".sv", ".sa1", ".mcr", ".mcd", ".ps2", ".gci", ".sgm", ".state")
     private val CHEAT_EXTS = setOf(".pchtxt", ".cht", ".chtx")
+    private val JAVA_EXTS = setOf(".jar", ".jad")
 
     /**
      * [library]: the main library (null = none found). [stillGrowing] is asked for recently changed
@@ -89,20 +104,19 @@ object ScanPlanner {
 
         val guess = Classifier.classify(file, library)
         val system = guess.system ?: return item(ScanGroup.Review, guess.reason)
-        if (!guess.sure) return item(ScanGroup.Review, guess.reason)
         if (!guess.packedOk) {
             return item(ScanGroup.Review, "${guess.reason}: extract it first (not done on the Thor)")
         }
         val target = if (guess.sub.isEmpty()) File(library.path, system) else File(File(library.path, system), guess.sub)
         if (file.parentFile?.absoluteFile?.normalize() == target.absoluteFile.normalize()) {
-            return item(ScanGroup.Review, "Already in ${library.full(system)}")
+            return item(ScanGroup.InPlace, "Already in ${library.full(system)}")
         }
         val group = when (guess.switchKind) {
             SwitchKind.Update -> ScanGroup.Updates
             SwitchKind.Dlc -> ScanGroup.Dlc
             else -> ScanGroup.Games
         }
-        return item(group, guess.reason, target)
+        return ScanItem(file, size, modified, group, target, guess.reason, onByDefault = guess.sure)
     }
 
     /** Saves, cheats, APKs and firmware: recognized only to keep them out of the library. */
@@ -111,6 +125,7 @@ object ScanPlanner {
         val ext = FileNames.extOf(name)
         return when {
             ext in APK_EXTS -> "App (APK): install it yourself"
+            ext in JAVA_EXTS -> "Java app: not sorted"
             "firmware" in lower -> "Looks like firmware: not sorted"
             ext in CHEAT_EXTS || "cheat" in lower -> "Looks like cheats: not sorted yet"
             ext in SAVE_EXTS || Regex("""(^|[^a-z])saves?([^a-z]|$)""").containsMatchIn(lower) -> "Looks like a save: not sorted yet"

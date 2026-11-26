@@ -9,24 +9,86 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/** Saves on a fake Android/data tree in a temporary folder. */
+/** Saves on a fake Android/data tree in a temporary folder (never on a device). */
 class SwitchSavesTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private val eden = SwitchSaves.EMULATORS.first { it.packageName == "dev.igawa6.edenduo" }
     private val androidData get() = File(tmp.root, "Android/data")
     private val backups get() = File(tmp.root, "ThorBro/SaveBackups")
 
-    private fun saveDir(titleId: String) =
-        File(SwitchSaves.saveRoot(androidData, eden), "0000000000000000/5D1B4CDA089A581DAA9E48BC2B43C120/$titleId")
+    /** The user UUID as stored in profiles.dat; the save folder name is its bytes reversed. */
+    private val uuid = byteArrayOf(0x20, 0xC1.toByte(), 0x43, 0x2B, 0xBC.toByte(), 0x48, 0x9E.toByte(), 0xAA.toByte(), 0x1D, 0x58, 0x9A.toByte(), 0x08, 0xDA.toByte(), 0x4C, 0x1B, 0x5D)
+    private val user = "5D1B4CDA089A581DAA9E48BC2B43C120" // real value from the Thor
 
-    private fun makeSave(titleId: String, content: String): File = saveDir(titleId).apply {
-        mkdirs()
-        File(this, "progress.dat").writeText(content)
-        File(this, "sub").mkdirs()
-        File(this, "sub/slot1.bin").writeText("$content-slot")
+    private fun profilesDat(slot: Int = 0): ByteArray = ByteArray(0x10 + 8 * 0xC8).also { uuid.copyInto(it, 0x10 + slot * 0xC8) }
+
+    /** An Eden-style app folder: config.ini, profiles.dat, saves of [user] and of an orphan user. */
+    private fun yuzuApp(pkg: String, withProfiles: Boolean = true): File {
+        val app = File(androidData, pkg)
+        val nand = File(app, "files/nand")
+        File(app, "files/config").mkdirs()
+        File(app, "files/config/config.ini").writeText("[Data%20Storage]\nnand_directory=${nand.path}\n\n[System]\ncurrent_user=0\n")
+        if (withProfiles) File(nand, "system/save/8000000000000010/su/avators").apply { mkdirs() }.resolve("profiles.dat").writeBytes(profilesDat())
+        return nand
+    }
+
+    private fun save(nand: File, userFolder: String, titleId: String, content: String): File =
+        File(nand, "user/save/0000000000000000/$userFolder/$titleId").apply {
+            mkdirs()
+            File(this, "progress.dat").writeText(content)
+            File(this, "sub").mkdirs()
+            File(this, "sub/slot1.bin").writeText("$content-slot")
+        }
+
+    @Test
+    fun `user folder from profiles dat, bytes reversed`() {
+        assertEquals(user, SwitchSaves.userFolder(profilesDat(), 0))
+        assertEquals(user, SwitchSaves.userFolder(profilesDat(slot = 2), 0)) // empty slot 0: first user
+        assertNull(SwitchSaves.userFolder(ByteArray(0x200), 0))
+        assertEquals("/x/nand", SwitchSaves.iniValue("[Data%20Storage]\nnand_directory=/x/nand\nnand_directory\\default=true", "Data%20Storage", "nand_directory"))
+        assertNull(SwitchSaves.iniValue("[Other]\nnand_directory=/x", "Data%20Storage", "nand_directory"))
+        assertNull(SwitchSaves.iniValue("[Data%20Storage]\nnand_directory=", "Data%20Storage", "nand_directory"))
+    }
+
+    @Test
+    fun `only the current user's saves count, orphan user folders are ignored`() {
+        val nand = yuzuApp("dev.igawa6.edenduo")
+        save(nand, user, "0100646009FBE000", "dc")
+        save(nand, "1DAA9E48BC2B43C12000000000000000", "01006A800016E000", "orphan") // real orphan name from the Thor
+        File(nand, "user/save/0000000000000000/$user/8000000000000010").mkdirs() // system save
+        val scan = SwitchSaves(backups).find(androidData, mapOf("0100646009FBE000" to "Dead Cells"))
+        assertEquals(listOf("Dead Cells"), scan.saves.map { it.name })
+        assertTrue(scan.notes.isEmpty())
+    }
+
+    @Test
+    fun `without profiles dat every user folder is used and the app says so`() {
+        val nand = yuzuApp("dev.eden.eden_emulator", withProfiles = false)
+        save(nand, user, "0100646009FBE000", "a")
+        save(nand, "1DAA9E48BC2B43C12000000000000000", "01006A800016E000", "b")
+        val scan = SwitchSaves(backups).find(androidData, emptyMap())
+        assertEquals(2, scan.saves.size)
+        assertEquals(1, scan.notes.size)
+        assertTrue(scan.notes.single().contains("profiles.dat"))
+    }
+
+    @Test
+    fun `Peanuts saves are read, work and lock files ignored, restore is refused`() {
+        val saves = File(androidData, "dev.nxnative.android.peanuts/files/saves")
+        File(saves, "01007EF00011E000").apply { mkdirs() }.resolve("game.sav").writeText("botw")
+        File(saves, "01007EF00011E000.work").apply { mkdirs() }.resolve("game.sav").writeText("botw")
+        File(saves, "01007EF00011E000.lock").writeText("")
+        val switchSaves = SwitchSaves(backups)
+        val save = switchSaves.find(androidData, mapOf("01007EF00011E000" to "Zelda")).saves.single()
+        assertEquals("Peanuts", save.emulator.label)
+        assertFalse(save.emulator.canRestore)
+        val dir = switchSaves.backUp(save, time = 1_000)
+        assertEquals("botw", File(dir, "save/game.sav").readText())
+        val backup = switchSaves.find(androidData, emptyMap()).saves.single().backups.single()
+        assertTrue(runCatching { switchSaves.restore(save, backup) }.isFailure)
+        assertEquals("botw", File(saves, "01007EF00011E000/game.sav").readText())
     }
 
     @Test
@@ -43,14 +105,13 @@ class SwitchSavesTest {
         assertEquals("Dead Cells", names["0100646009FBE000"])
         assertEquals("Super Mario Odyssey", names["0100000000010000"])
         assertEquals("Neon Abyss", names["0100BAB01113A000"])
-        assertEquals(3, names.size) // the update (…800) belongs to Dead Cells, the base file name wins
+        assertEquals(3, names.size)
     }
 
     @Test
-    fun `without a base game file the name comes from an update or DLC`() {
+    fun `BASE files and DLC give names too`() {
         val names = SwitchSaves.namesFromFileNames(
             listOf(
-                // Real names from the Thor: the BotW base file carries the update ID.
                 "The Legend of Zelda Breath of the Wild [01007EF00011E800][BASE][v1.5.0].xci",
                 "Dead Cells [DLC Fatal Falls][0100646009FBF003][v0].nsp",
             ),
@@ -58,61 +119,47 @@ class SwitchSavesTest {
         assertEquals("The Legend of Zelda Breath of the Wild", names["01007EF00011E000"])
         assertEquals("Dead Cells", names["0100646009FBE000"])
         assertEquals("0100646009FBE000" to 2, SwitchSaves.baseTitleId("0100646009FBF001"))
+        assertEquals("01007EF00011E000" to 0, SwitchSaves.baseTitleId("01007EF00011E800", "x [BASE]"))
     }
 
     @Test
-    fun `saves are found by title ID, unknown names show the title ID`() {
-        makeSave("0100646009FBE000", "dc")
-        makeSave("01006A800016E000", "smash")
-        File(SwitchSaves.saveRoot(androidData, eden), "0000000000000000/5D1B4CDA089A581DAA9E48BC2B43C120/8000000000000010").mkdirs()
-        val found = SwitchSaves(backups).find(androidData, mapOf("0100646009FBE000" to "Dead Cells"))
-        assertEquals(listOf("01006A800016E000", "Dead Cells"), found.map { it.name }) // system save ignored
-        assertNull(found.first().lastBackup)
-        assertTrue(found.all { it.size > 0 })
+    fun `backups are found in one pass and sorted newest first`() {
+        val nand = yuzuApp("dev.eden.eden_emulator")
+        save(nand, user, "0100646009FBE000", "v1")
+        val switchSaves = SwitchSaves(backups)
+        val save = switchSaves.find(androidData, mapOf("0100646009FBE000" to "Dead Cells")).saves.single()
+        switchSaves.backUp(save, time = 1_000)
+        switchSaves.backUp(save, time = 5_000)
+        File(backups, "Junk/folder").mkdirs() // no backup.json: ignored
+        val index = switchSaves.backupIndex()
+        assertEquals(listOf(5_000L, 1_000L), index.getValue("dev.eden.eden_emulator/0100646009FBE000").map { it.time })
+        val again = switchSaves.find(androidData, emptyMap()).saves.single()
+        assertEquals(5_000L, again.lastBackup)
+        assertEquals(2, again.backups.size)
+        assertEquals("v1-slot", File(again.backups.last().saveDir, "sub/slot1.bin").readText())
     }
 
     @Test
-    fun `back up copies the save with a note where it came from`() {
-        makeSave("0100646009FBE000", "v1")
-        val saves = SwitchSaves(backups)
-        val save = saves.find(androidData, mapOf("0100646009FBE000" to "Dead Cells")).single()
-        val dir = saves.backUp(save, time = 1_700_000_000_000)
-        assertEquals(File(backups, "Dead Cells"), dir.parentFile)
-        assertEquals("v1", File(dir, "save/progress.dat").readText())
-        assertEquals("v1-slot", File(dir, "save/sub/slot1.bin").readText())
-        assertTrue(File(dir, SwitchSaves.META).readText().contains("dev.igawa6.edenduo"))
-        assertEquals(1_700_000_000_000, saves.find(androidData, emptyMap()).single().lastBackup)
-    }
+    fun `restore puts the selected backup back and backs up the current save first`() {
+        val nand = yuzuApp("dev.eden.eden_emulator")
+        val dir = save(nand, user, "0100646009FBE000", "old")
+        val switchSaves = SwitchSaves(backups)
+        var save = switchSaves.find(androidData, mapOf("0100646009FBE000" to "Dead Cells")).saves.single()
+        switchSaves.backUp(save, time = 1_000) // "old"
+        File(dir, "progress.dat").writeText("good")
+        switchSaves.backUp(save, time = 2_000) // "good"
+        File(dir, "progress.dat").writeText("broken")
+        File(dir, "new-file.tmp").writeText("x")
 
-    @Test
-    fun `restore puts the latest backup back and backs up the current save first`() {
-        makeSave("0100646009FBE000", "good")
-        val saves = SwitchSaves(backups)
-        val save = saves.find(androidData, mapOf("0100646009FBE000" to "Dead Cells")).single()
-        saves.backUp(save, time = 1_000)
-        // The game overwrites the save with something worse.
-        File(saveDir("0100646009FBE000"), "progress.dat").writeText("broken")
-        File(saveDir("0100646009FBE000"), "new-file.tmp").writeText("x")
-
-        saves.restoreLatest(save, time = 2_000)
-        val dir = saveDir("0100646009FBE000")
-        assertEquals("good", File(dir, "progress.dat").readText())
+        save = switchSaves.find(androidData, emptyMap()).saves.single()
+        val oldest = save.backups.last()
+        switchSaves.restore(save, oldest, time = 3_000)
+        assertEquals("old", File(dir, "progress.dat").readText())
         assertFalse(File(dir, "new-file.tmp").exists())
-        // Nothing of ours is left next to the save.
-        assertEquals(listOf(dir.name), dir.parentFile!!.list()!!.toList())
-        // The broken save was backed up before (note "before restore"), and it is now the newest backup.
-        val newest = saves.backups(save.titleId, eden).first()
-        assertEquals(2_000L, newest.second)
-        assertEquals("broken", File(newest.first, "save/progress.dat").readText())
-    }
-
-    @Test
-    fun `restore without a backup fails and changes nothing`() {
-        makeSave("0100646009FBE000", "v1")
-        val saves = SwitchSaves(backups)
-        val save = saves.find(androidData, emptyMap()).single()
-        assertTrue(runCatching { saves.restoreLatest(save) }.isFailure)
-        assertEquals("v1", File(saveDir("0100646009FBE000"), "progress.dat").readText())
-        assertFalse(backups.exists())
+        assertEquals(listOf(dir.name), dir.parentFile!!.list()!!.toList()) // nothing of ours left next to it
+        val newest = switchSaves.find(androidData, emptyMap()).saves.single().backups.first()
+        assertEquals(3_000L, newest.time)
+        assertEquals("before restore", newest.note)
+        assertEquals("broken", File(newest.saveDir, "progress.dat").readText())
     }
 }

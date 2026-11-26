@@ -71,6 +71,15 @@ class ClassifierTest {
     }
 
     @Test
+    fun `a file tagged BASE is a base game even with an update ID`() {
+        assertEquals(SwitchKind.Game, Classifier.switchKind("01007EF00011E800", "Zelda [01007EF00011E800][BASE][v1.5.0].xci"))
+        assertEquals(SwitchKind.Update, Classifier.switchKind("01007EF00011E800", "Zelda [01007EF00011E800][v786432].nsp"))
+        val guess = Classifier.classify(TestFiles.file(dl, "The Legend of Zelda Breath of the Wild [01007EF00011E800][BASE][v1.5.0].xci"), lib())
+        assertEquals("", guess.sub)
+        assertEquals(SwitchKind.Game, guess.switchKind)
+    }
+
+    @Test
     fun `switch header without title ID`() {
         val guess = Classifier.classify(TestFiles.file(dl, "Some Game.nsp", TestFiles.nspBytes()), lib())
         assertEquals("switch", guess.system)

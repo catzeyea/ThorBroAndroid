@@ -33,7 +33,14 @@ data class Place(val label: String, val path: File, val detail: String, val isSt
 sealed interface ScanState {
     data object Idle : ScanState
     data class Scanning(val folder: File) : ScanState
-    data class Preview(val result: ScanResult, val copies: Int) : ScanState
+    /**
+     * [selected]: the files switched on (only these move). [otherStorage]: files whose target is on
+     * another storage (they are copied, checked and then deleted).
+     */
+    data class Preview(val result: ScanResult, val selected: Set<File>, val otherStorage: Set<File>) : ScanState {
+        val selectedItems get() = result.toMove.filter { it.file in selected }
+        val copies get() = selected.count { it in otherStorage }
+    }
     data class Moving(val done: Int, val total: Int, val current: String, val copying: Boolean, val bytes: Long, val bytesTotal: Long, val stopping: Boolean) : ScanState
     data class Done(val moved: Int, val total: Int, val problems: List<String>, val stopped: Boolean, val log: MoveLog?) : ScanState
     data object Undoing : ScanState
@@ -74,6 +81,18 @@ class FilesController(private val context: Context, private val scope: Coroutine
 
     private companion object {
         const val PROGRESS_STEP = 8L shl 20
+        const val KEY_SCAN_INFO_HIDDEN = "scan_info_hidden"
+    }
+
+    private val settings = context.getSharedPreferences("files", Context.MODE_PRIVATE)
+
+    /** "Don't show this again" on the Scan info card (remembered). */
+    var scanInfoHidden by mutableStateOf(settings.getBoolean(KEY_SCAN_INFO_HIDDEN, false))
+        private set
+
+    fun rememberScanInfoHidden(hidden: Boolean) {
+        scanInfoHidden = hidden
+        settings.edit().putBoolean(KEY_SCAN_INFO_HIDDEN, hidden).apply()
     }
 
     private val focusMemory = mutableMapOf<String, Int>()
@@ -186,8 +205,8 @@ class FilesController(private val context: Context, private val scope: Coroutine
                 val found = Storages.list(context)
                 val library = Libraries.find(found).firstOrNull()
                 val result = ScanPlanner.plan(folder, library)
-                val copies = result.toMove.count { !Storages.sameStorage(it.file, it.target!!, found) }
-                ScanState.Preview(result, copies)
+                val otherStorage = result.toMove.filter { !Storages.sameStorage(it.file, it.target!!, found) }.map { it.file }.toSet()
+                ScanState.Preview(result, result.defaultSelection, otherStorage)
             }
             if (scan is ScanState.Scanning) scan = preview
         }
@@ -195,7 +214,8 @@ class FilesController(private val context: Context, private val scope: Coroutine
 
     fun confirmMove() {
         val preview = scan as? ScanState.Preview ?: return
-        val items = preview.result.toMove
+        val items = preview.selectedItems
+        if (items.isEmpty()) return
         stop.set(false)
         scope.launch {
             val found = storages.ifEmpty { withContext(Dispatchers.IO) { Storages.list(context) } }
@@ -241,6 +261,16 @@ class FilesController(private val context: Context, private val scope: Coroutine
             refreshPlaces()
         }
     }
+
+    /** Switches one file of the preview on or off. */
+    fun toggle(file: File) {
+        val preview = scan as? ScanState.Preview ?: return
+        if (preview.result.toMove.none { it.file == file }) return
+        scan = preview.copy(selected = if (file in preview.selected) preview.selected - file else preview.selected + file)
+    }
+
+    /** Focus is on a file row of the preview (A switches it), not on the Move button. For the hint bar. */
+    var previewFocusOnRow by mutableStateOf(false)
 
     /** B while moving: stops after the current file. */
     fun stopMove() {

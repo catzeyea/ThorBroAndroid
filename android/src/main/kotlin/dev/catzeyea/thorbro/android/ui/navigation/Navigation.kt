@@ -39,14 +39,23 @@ sealed interface SubScreen {
 
     data object About : SubScreen
 
+    /** "How it works": one card per tab. */
+    data object Help : SubScreen
+
+    /** "What does Scan do?" before a scan (until "Don't show this again"). */
+    data class ScanInfo(val folderName: String) : SubScreen
+
     /** Select in Files: pin / unpin a folder, make it the default scan folder. */
     data class FolderOptions(val path: String) : SubScreen
 
     /** Scan preview, moving progress and result of "Scan this folder". */
     data object Scan : SubScreen
 
-    /** "Restore latest" asks first. */
-    data class ConfirmRestore(val saveKey: String) : SubScreen
+    /** One game's save: cover, backups, Back up now, Restore selected. */
+    data class SaveGame(val saveKey: String) : SubScreen
+
+    /** "Restore selected" asks first. [backupPath]: the backup folder to put back. */
+    data class ConfirmRestore(val saveKey: String, val backupPath: String) : SubScreen
 }
 
 /** Game controller buttons the app reacts to. D-pad and stick are handled by Compose's focus system. */
