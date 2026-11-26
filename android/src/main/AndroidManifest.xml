@@ -3,10 +3,18 @@
   The manifest tells Android what this app is made of (activities, permissions) and what it
   wants to see on the device. Android reads it at install time, before any code runs.
 
-  Permissions: none. The app does not use the network itself (Moonlight does the streaming),
-  so it does not need INTERNET.
+  Permissions: only "All files access" (MANAGE_EXTERNAL_STORAGE), for the Files and Saves tabs.
+  The user grants it in Settings (the app opens that page). The Thor firmware lets apps read and
+  write shared storage without it, but a firmware update could change that.
+  The app does not use the network itself (Moonlight does the streaming), so it does not need INTERNET.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Not for the Play Store (sideloaded app), hence ScopedStorage is ignored for lint. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!--
       Package visibility (Android 11+): an app only "sees" other installed apps that it declares

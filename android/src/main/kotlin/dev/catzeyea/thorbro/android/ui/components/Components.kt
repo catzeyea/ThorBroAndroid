@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -62,22 +61,33 @@ import dev.catzeyea.thorbro.android.ui.theme.du
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Draws the focus ring: a cream outline of [shape], [ThorDimens.FocusRingOffset] outside the element.
- * Put it early in the modifier chain so the ring is drawn on top of the element.
+ * Draws the focus ring: a cream outline of [shape], [ThorDimens.FocusRingOffset] outside the element,
+ * while the focusable element further down the modifier chain has focus. Put it early in the chain
+ * (before `focusable` / [controllerClickable]) so the ring is drawn on top of the element.
+ *
+ * The focus state is written by `onFocusChanged` (called right when focus moves) and only read while
+ * drawing. So a focus change only redraws, without a recomposition, and the ring appears in the same
+ * frame as the focus change. (Going through `collectIsFocusedAsState` cost one extra frame.)
  */
-fun Modifier.focusRing(visible: Boolean, shape: Shape): Modifier = drawWithContent {
-    drawContent()
-    if (visible) {
-        val width = ThorDimens.FocusRingWidth.toPx()
-        // The stroke is centered on the outline, so grow by offset + half the stroke width.
-        val grow = ThorDimens.FocusRingOffset.toPx() + width / 2
-        val outline = shape.createOutline(
-            Size(size.width + 2 * grow, size.height + 2 * grow),
-            layoutDirection,
-            this,
-        )
-        translate(-grow, -grow) { drawOutline(outline, ThorColors.Focus, style = Stroke(width)) }
-    }
+@Composable
+fun Modifier.focusRing(shape: Shape): Modifier {
+    val focused = remember { mutableStateOf(false) }
+    return this
+        .drawWithContent {
+            drawContent()
+            if (focused.value) {
+                val width = ThorDimens.FocusRingWidth.toPx()
+                // The stroke is centered on the outline, so grow by offset + half the stroke width.
+                val grow = ThorDimens.FocusRingOffset.toPx() + width / 2
+                val outline = shape.createOutline(
+                    Size(size.width + 2 * grow, size.height + 2 * grow),
+                    layoutDirection,
+                    this,
+                )
+                translate(-grow, -grow) { drawOutline(outline, ThorColors.Focus, style = Stroke(width)) }
+            }
+        }
+        .onFocusChanged { focused.value = it.isFocused }
 }
 
 /** A hard drop shadow (no blur): [shape] again, moved by the shadow's offset. Draws behind the element. */
@@ -161,10 +171,9 @@ fun Modifier.controllerClickable(
  */
 @Composable
 fun Modifier.focusableCard(shape: Shape, interactionSource: MutableInteractionSource): Modifier {
-    val focused by interactionSource.collectIsFocusedAsState()
     val requester = remember { FocusRequester() }
     return this
-        .focusRing(focused, shape)
+        .focusRing(shape)
         .focusRequester(requester)
         .focusable(interactionSource = interactionSource)
         .pointerInput(Unit) { detectTapGestures(onTap = { requester.requestFocus() }) }
@@ -187,7 +196,8 @@ enum class ButtonKind {
 
 /**
  * A ThorBro button. [fontSize] is in design units; null uses the kind's default size.
- * [showABadge] draws the "A" controller glyph inside a main button.
+ * [badge] draws a controller glyph ("A", "X") inside the button; main buttons show "A" by default.
+ * [minHeight] overrides the default minimum height (64 dp for main buttons, 48 dp for the others).
  */
 @Composable
 fun ThorButton(
@@ -195,11 +205,11 @@ fun ThorButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     kind: ButtonKind = ButtonKind.Secondary,
-    showABadge: Boolean = kind == ButtonKind.Main,
+    badge: String? = if (kind == ButtonKind.Main) "A" else null,
     fontSize: Int? = null,
+    minHeight: Dp? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
     val corners = when (kind) {
         ButtonKind.Main -> ThorShapes.ButtonMain
         ButtonKind.Secondary -> ThorShapes.ButtonSecondary
@@ -230,20 +240,20 @@ fun ThorButton(
         ButtonKind.Secondary -> Modifier.border(ThorDimens.Outline, ThorColors.InkLine, shape)
         ButtonKind.Small -> Modifier.border(ThorDimens.Outline, ThorColors.InkSoft, shape)
     }
-    val minHeight = if (kind == ButtonKind.Main) ThorDimens.MinMainAction else ThorDimens.MinTarget
+    val height = minHeight ?: if (kind == ButtonKind.Main) ThorDimens.MinMainAction else ThorDimens.MinTarget
 
     Row(
         modifier
-            .focusRing(focused, shape)
+            .focusRing(shape)
             .then(surface)
             .controllerClickable(interaction, onClick)
-            .heightIn(min = minHeight)
+            .heightIn(min = height)
             .padding(horizontal = padH, vertical = padV),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.du),
     ) {
-        if (showABadge) {
-            ButtonGlyph("A", diameter = (size + 6).du, fontSize = (size * 2) / 3, color = ThorColors.OnAccent)
+        if (badge != null) {
+            ButtonGlyph(badge, diameter = (size + 6).du, fontSize = (size * 2) / 3, color = textColor)
         }
         Text(text, style = ThorType.style(size, weight, textColor))
     }
