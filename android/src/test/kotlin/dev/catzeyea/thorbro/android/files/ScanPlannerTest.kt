@@ -1,0 +1,108 @@
+package dev.catzeyea.thorbro.android.files
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+
+class ScanPlannerTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    /** Files in the tests are "old" unless a test says otherwise, so no second sample is taken. */
+    private val later = System.currentTimeMillis() + 10 * ScanPlanner.RECENT_MILLIS
+    private val neverGrowing: (File, Long, Long) -> Boolean = { _, _, _ -> false }
+
+    private fun plan(dl: File, lib: GameLibrary?, now: Long = later, grow: (File, Long, Long) -> Boolean = neverGrowing) =
+        ScanPlanner.plan(dl, lib, now, grow)
+
+    private fun ScanResult.item(name: String) = items.single { it.file.name == name }
+
+    @Test
+    fun `games, updates and DLC get their library targets`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "Celeste [0100ABCD12345000].nsp")
+        TestFiles.file(dl, "Celeste [0100ABCD12345800][v1].nsp")
+        TestFiles.file(dl, "Celeste [0100ABCD12346001].nsp")
+        TestFiles.file(dl, "Mario.gba")
+        val result = plan(dl, lib)
+        val switch = File(lib.path, "switch")
+        assertEquals(ScanGroup.Games, result.item("Celeste [0100ABCD12345000].nsp").group)
+        assertEquals(switch, result.item("Celeste [0100ABCD12345000].nsp").target)
+        assertEquals(ScanGroup.Updates, result.item("Celeste [0100ABCD12345800][v1].nsp").group)
+        assertEquals(File(switch, "update"), result.item("Celeste [0100ABCD12345800][v1].nsp").target)
+        assertEquals(ScanGroup.Dlc, result.item("Celeste [0100ABCD12346001].nsp").group)
+        assertEquals(File(lib.path, "Game Boy Advance"), result.item("Mario.gba").target)
+        assertEquals(4, result.toMove.size)
+    }
+
+    @Test
+    fun `saves, cheats, APKs and firmware are never guessed`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        listOf("Hollow Knight.sav", "botw-cheats.zip", "main.pchtxt", "Tailscale.apk", "Firmware.23.0.1.zip", "my saves.zip")
+            .forEach { TestFiles.file(dl, it) }
+        val result = plan(dl, lib)
+        result.items.forEach {
+            assertEquals(it.file.name, ScanGroup.Review, it.group)
+            assertNull(it.target)
+        }
+        assertTrue(result.item("Tailscale.apk").reason.startsWith("App"))
+        assertTrue(result.item("Firmware.23.0.1.zip").reason.contains("firmware"))
+        assertTrue(result.item("botw-cheats.zip").reason.contains("cheats"))
+        assertTrue(result.item("Hollow Knight.sav").reason.contains("save"))
+    }
+
+    @Test
+    fun `unfinished downloads are skipped, by name and when still growing`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "gamenative-v1.4.0.apk.part")
+        TestFiles.file(dl, "Game [0100ABCD12345000].nsp.crdownload")
+        val growing = TestFiles.file(dl, "Growing [0100ABCD22345000].nsp")
+        val now = System.currentTimeMillis()
+        val result = plan(dl, lib, now = now) { file, _, _ -> file == growing }
+        assertEquals(ScanGroup.Skipped, result.item("gamenative-v1.4.0.apk.part").group)
+        assertEquals(ScanGroup.Skipped, result.item("Game [0100ABCD12345000].nsp.crdownload").group)
+        assertEquals(ScanGroup.Skipped, result.item("Growing [0100ABCD22345000].nsp").group)
+        assertTrue(result.toMove.isEmpty())
+    }
+
+    @Test
+    fun `7z, rar, zips that need extracting, folders and unsure guesses stay in Review`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"))
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "TLOZ-BOTW-_Update160_.rar")
+        TestFiles.file(dl, "pack.7z")
+        TestFiles.zip(dl, "BotW (Update)_01007EF00011E800__US_.zip", mapOf("update.nsp" to 100))
+        File(dl, "Some folder").mkdirs()
+        TestFiles.file(dl, "Rom.zip") // .zip fits gba and others without a header: unsure
+        val result = plan(dl, lib)
+        result.items.forEach { assertEquals(it.file.name, ScanGroup.Review, it.group) }
+        assertTrue(result.item("BotW (Update)_01007EF00011E800__US_.zip").reason.contains("extract"))
+        assertTrue(result.item("Some folder").reason.startsWith("Folder"))
+    }
+
+    @Test
+    fun `without a library nothing moves, hidden files are ignored`() {
+        val dl = tmp.newFolder("Download")
+        TestFiles.file(dl, "Game [0100ABCD12345000].nsp")
+        TestFiles.file(dl, ".thorbro-probe")
+        val result = plan(dl, null)
+        assertEquals(1, result.items.size)
+        assertEquals(ScanGroup.Review, result.items.single().group)
+    }
+
+    @Test
+    fun `a file that is already in its target folder is not moved again`() {
+        val lib = TestFiles.library(tmp.newFolder("sd"), switchGames = 1)
+        val result = plan(File(lib.path, "switch"), lib)
+        assertTrue(result.toMove.isEmpty())
+        assertTrue(result.items.first { it.file.name.endsWith(".nsp") }.reason.startsWith("Already in"))
+    }
+}

@@ -2,6 +2,8 @@ package dev.catzeyea.thorbro.android.profile
 
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /** A saved profile plus the time it was received (milliseconds since 1970). */
 data class StoredProfile(val profile: StreamProfile, val receivedAtMillis: Long)
@@ -30,16 +32,19 @@ class ProfileStore(directory: File) {
     }
 
     /**
-     * Saves the JSON text. It is written to a temporary file first and then renamed, so a crash
-     * while writing never leaves a half-written profile behind.
+     * Saves the JSON text. It is written to a temporary file first and then moved over the old one
+     * (atomic, replacing on purpose: it is the app's own private file), so a crash while writing
+     * never leaves a half-written profile behind.
      */
     @Throws(IOException::class)
     fun save(json: String) {
         val temp = File(file.parentFile, file.name + ".tmp")
         temp.writeText(json, Charsets.UTF_8)
-        if (!temp.renameTo(file)) {
+        try {
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: IOException) {
             temp.delete()
-            throw IOException("Could not save the profile to ${file.path}")
+            throw IOException("Could not save the profile to ${file.path}", e)
         }
     }
 

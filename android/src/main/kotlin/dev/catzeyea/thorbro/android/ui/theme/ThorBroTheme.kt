@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -199,6 +200,38 @@ object ThorType {
     @Composable @ReadOnlyComposable fun hint() = style(15, color = ThorColors.Mute)
 }
 
+private fun thorTypography(): Typography {
+    val base = TextStyle(fontFamily = JetBrainsMono, color = ThorColors.Ink)
+    val defaults = Typography()
+    return Typography(
+        displayLarge = defaults.displayLarge.merge(base),
+        displayMedium = defaults.displayMedium.merge(base),
+        displaySmall = defaults.displaySmall.merge(base),
+        headlineLarge = defaults.headlineLarge.merge(base),
+        headlineMedium = defaults.headlineMedium.merge(base),
+        headlineSmall = defaults.headlineSmall.merge(base),
+        titleLarge = defaults.titleLarge.merge(base),
+        titleMedium = defaults.titleMedium.merge(base),
+        titleSmall = defaults.titleSmall.merge(base),
+        bodyLarge = defaults.bodyLarge.merge(base),
+        bodyMedium = defaults.bodyMedium.merge(base),
+        bodySmall = defaults.bodySmall.merge(base),
+        labelLarge = defaults.labelLarge.merge(base),
+        labelMedium = defaults.labelMedium.merge(base),
+        labelSmall = defaults.labelSmall.merge(base),
+    )
+}
+
+private fun thorColorScheme() = darkColorScheme(
+    background = ThorColors.Bg,
+    surface = ThorColors.Panel,
+    onBackground = ThorColors.Ink,
+    onSurface = ThorColors.Ink,
+    primary = ThorColors.Orange,
+    onPrimary = ThorColors.OnAccent,
+    error = ThorColors.Danger,
+)
+
 /**
  * Applies the ThorBro look: dark colors, JetBrains Mono everywhere, and the design scale for this window.
  * Material3 is only used for Text; its typography is set to JetBrains Mono as well so nothing falls back
@@ -208,34 +241,10 @@ object ThorType {
 fun ThorBroTheme(content: @Composable () -> Unit) {
     BoxWithConstraints {
         val scale = DesignScale.forWindow(maxWidth.value, maxHeight.value)
-        val base = TextStyle(fontFamily = JetBrainsMono, color = ThorColors.Ink)
-        val defaults = Typography()
-        val typography = Typography(
-            displayLarge = defaults.displayLarge.merge(base),
-            displayMedium = defaults.displayMedium.merge(base),
-            displaySmall = defaults.displaySmall.merge(base),
-            headlineLarge = defaults.headlineLarge.merge(base),
-            headlineMedium = defaults.headlineMedium.merge(base),
-            headlineSmall = defaults.headlineSmall.merge(base),
-            titleLarge = defaults.titleLarge.merge(base),
-            titleMedium = defaults.titleMedium.merge(base),
-            titleSmall = defaults.titleSmall.merge(base),
-            bodyLarge = defaults.bodyLarge.merge(base),
-            bodyMedium = defaults.bodyMedium.merge(base),
-            bodySmall = defaults.bodySmall.merge(base),
-            labelLarge = defaults.labelLarge.merge(base),
-            labelMedium = defaults.labelMedium.merge(base),
-            labelSmall = defaults.labelSmall.merge(base),
-        )
-        val colors = darkColorScheme(
-            background = ThorColors.Bg,
-            surface = ThorColors.Panel,
-            onBackground = ThorColors.Ink,
-            onSurface = ThorColors.Ink,
-            primary = ThorColors.Orange,
-            onPrimary = ThorColors.OnAccent,
-            error = ThorColors.Danger,
-        )
+        // Created once: a new color scheme on every recomposition (e.g. every tab switch) would make
+        // MaterialTheme's static composition local change, which recomposes the whole UI.
+        val typography = remember { thorTypography() }
+        val colors = remember { thorColorScheme() }
         MaterialTheme(colorScheme = colors, typography = typography) {
             CompositionLocalProvider(
                 LocalDesignScale provides scale,

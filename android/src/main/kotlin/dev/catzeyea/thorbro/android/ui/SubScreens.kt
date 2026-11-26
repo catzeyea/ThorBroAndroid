@@ -30,6 +30,7 @@ import dev.catzeyea.thorbro.android.ui.components.ButtonKind
 import dev.catzeyea.thorbro.android.ui.components.ThorButton
 import dev.catzeyea.thorbro.android.ui.components.focusableCard
 import dev.catzeyea.thorbro.android.ui.components.panel
+import dev.catzeyea.thorbro.android.ui.navigation.OnControllerKeys
 import dev.catzeyea.thorbro.android.ui.navigation.SubScreen
 import dev.catzeyea.thorbro.android.ui.theme.ThorColors
 import dev.catzeyea.thorbro.android.ui.theme.ThorShapes
@@ -39,15 +40,29 @@ import kotlinx.coroutines.launch
 
 /** A screen on top of the tabs. B, the Back/OK button or the system back gesture closes it. */
 @Composable
-fun SubScreenContent(subScreen: SubScreen, entry: FocusRequester, actions: AppActions) {
+fun SubScreenContent(subScreen: SubScreen, state: AppUiState, entry: FocusRequester, actions: AppActions, controllers: Controllers) {
     when (subScreen) {
         is SubScreen.LaunchError -> LaunchErrorScreen(subScreen.message, entry, actions.onCloseSubScreen)
         is SubScreen.FontLicense -> FontLicenseScreen(subScreen.text, entry, actions.onCloseSubScreen)
+        SubScreen.Setup -> {
+            OnControllerKeys { false }
+            SetupScreen(entry)
+        }
+        SubScreen.About -> {
+            OnControllerKeys { false }
+            AboutScreen(state, entry, actions)
+        }
+        is SubScreen.FolderOptions -> FolderOptionsScreen(subScreen.path, controllers.files, entry, actions)
+        SubScreen.Scan -> ScanScreen(controllers.files, entry, actions)
+        is SubScreen.ConfirmRestore -> ConfirmRestoreScreen(subScreen.saveKey, controllers.saves, entry, actions)
+        // Drawn as an overlay by ThorBroApp, never as a full screen.
+        SubScreen.Menu -> Unit
     }
 }
 
 @Composable
 private fun LaunchErrorScreen(message: String, entry: FocusRequester, onClose: () -> Unit) {
+    OnControllerKeys { false }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             Modifier
@@ -76,6 +91,7 @@ private fun LaunchErrorScreen(message: String, entry: FocusRequester, onClose: (
  */
 @Composable
 private fun FontLicenseScreen(text: String, entry: FocusRequester, onClose: () -> Unit) {
+    OnControllerKeys { false }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val step = with(LocalDensity.current) { 120.dp.toPx() }

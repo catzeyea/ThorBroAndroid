@@ -4,9 +4,9 @@
 
 # ThorBro for Android
 
-A small launcher app for the AYN Thor that works together with [ThorBro](https://github.com/catzeyea/ThorBro) on your PC. You send a stream profile from ThorBro to this app, pick a game, and the app starts [Moonlight](https://moonlight-stream.org/) with the right PC and game.
+A small companion app for the AYN Thor that works together with [ThorBro](https://github.com/catzeyea/ThorBro) on your PC. It shows how the Thor is doing, sorts downloaded games into your ES-DE library, backs up Switch saves, and starts PC games through [Moonlight](https://moonlight-stream.org/) from a stream profile that ThorBro sends.
 
-> **Status: alpha.** The app builds and the 74 unit tests pass. Stick input and the layout were only checked by hand on a Thor. Expect rough edges. See [Not done yet](#not-done-yet).
+> **Status: alpha.** The app builds and the 118 unit tests pass. Stick input and the layout were only checked by hand on a Thor. Expect rough edges. See [Not done yet](#not-done-yet).
 
 ## How it works
 
@@ -28,14 +28,16 @@ The app only checks whether Moonlight and Tailscale are installed and links to t
 
 ## Install
 
-Build the release APK (see below), then install it and compile it right away:
+Build the release APK (see below), install it, start it once, wait about 20 seconds, then compile it:
 
 ```
 adb install -r android/build/outputs/apk/release/android-release.apk
+adb shell am start -n dev.catzeyea.thorbro/dev.catzeyea.thorbro.android.MainActivity
+# wait about 20 seconds
 adb shell cmd package compile -m speed-profile -f dev.catzeyea.thorbro
 ```
 
-Run the compile command after every install: a freshly installed app runs uncompiled, and tab switches stutter until Android compiles it, which otherwise only happens later in the background.
+Do this after every install: a freshly installed app runs uncompiled, and tab switches stutter until Android compiles it, which otherwise only happens later in the background. The app has to run once before, so it can hand its built-in profile to Android; compiling right after the install does nothing. Check with `adb shell dumpsys package dexopt | grep -A2 dev.catzeyea.thorbro`: it should say `status=speed-profile`, not `verify`.
 
 Release builds are signed with the local debug key, like debug builds, so the release APK installs over a debug install and keeps the stored profile. Switching to a real release key later needs a one-time `adb uninstall dev.catzeyea.thorbro` first (this deletes the stored profile, so send it again from ThorBro). Debug builds are noticeably slower and only meant for development.
 
@@ -44,23 +46,35 @@ Release builds are signed with the local debug key, like debug builds, so the re
 1. Install Moonlight on the Thor and pair it with your Sunshine host once, as described by Moonlight.
 2. In ThorBro on the PC, open **Stream → Stream PC games to your Thor** and press **Send to Thor app**. ThorBro sends the profile over adb.
 3. Open the app on the Thor. A rejected profile never replaces the one you already have; the Stream tab shows why it was rejected.
+4. For Files and Saves, allow "All files access" when the app asks (button **Allow**). On the current Thor firmware every app can reach shared storage anyway, but a firmware update could change that.
 
 ### Tabs
 
-- **Stream:** the PC from the profile (name, Tailscale and home address, game count) and two steps.
-  - **Open Tailscale** opens the Tailscale app.
-  - **Connect to PC** (shown once a profile exists) starts the profile's `Desktop` entry through Moonlight. If the profile has no `Desktop` entry, it only opens Moonlight.
-  - **Open Moonlight only** opens Moonlight without starting anything.
-- **Games:** the games from the profile. Select one to start it through Moonlight.
-- **Setup:** four static steps (Tailscale, Sunshine, send the profile, pair Moonlight).
-- **About:** app version, whether Moonlight and Tailscale are installed (with download links), profile details and PC addresses for Moonlight's "Add PC", notes, and the font license.
+- **Start:** ThorBro's mood and the Thor's health: battery (charging only when Android reports status "charging"), internal storage, SD card, CPU load and CPU temperature. Without an SD card, RAM takes its place. Values that can't be read are left out. ThorBro sleeps while no PC is connected over USB.
+- **Files:** storages and pinned folders on the left, the open folder on the right. **Scan this folder** (X) looks through the open folder (Download by default) and shows a preview: games, updates and DLC with their target in the main ES-DE library (the `ROMs` folder with the most games). Nothing moves before you confirm. Details below.
+- **Saves:** Switch saves of Eden, Eden Duo, Citron, Sudachi and yuzu. **Back up** copies a save to `ThorBro/SaveBackups/<game>/<time>`, **Restore latest** puts the newest backup back after asking, and backs up the current save first. No sync with the PC, no import.
+- **Stream:** the PC from the profile, step 1 (Open Tailscale) and step 2 (Connect to PC) with the PC's games as buttons, so a game can be started directly. **Connect to PC** starts the profile's `Desktop` entry (or opens Moonlight if there is none). Without a profile the tab points to Setup.
+- **Menu** (Y, top right): **Setup** (four steps to connect the PC) and **About** (version, installed apps with download links, profile details, font license).
+
+The header shows "PC connected" while the Thor has a USB data connection to a computer, else "No PC".
+
+### Sorting files (Scan this folder)
+
+- Same rules as the PC app: Switch title ID in the name (`[0100…]`, `(0100…)`, and here also `_0100…_`; ending `000` = game, `800` = update, anything else = DLC; updates and DLC go to `switch/update`), then the file header, then the extension (ES-DE `systeminfo.txt`, or the folder name).
+- Only sure guesses move. Unsure guesses, unknown files, folders, `.7z` and `.rar`, and zips that would need extracting stay where they are (Review). Saves, cheats, APKs and firmware are not sorted.
+- Unfinished downloads (`.part`, `.crdownload`, … or files that still grow) are skipped.
+- Nothing is ever overwritten. On the same storage a file is moved; to another storage it is copied, checked, and only then deleted. File names are made safe for the SD card (`:` becomes ` -`).
+- Every move is written to `ThorBro/logs/moves-<time>.jsonl` on internal storage; **Undo** on the result screen puts the files back.
 
 ### Controller
 
 - **L1 / R1:** previous / next tab (no wrap-around)
 - **D-pad:** move focus (stick input goes through Compose's focus system)
-- **A:** activate the focused element
-- **B:** closes a sub-page (start error, font license). On a main tab it does nothing, so it never closes the app.
+- **A:** activate the focused element (in Saves: back up)
+- **B:** back: closes a sub-page or the menu, goes one folder up in Files, stops a running move after the current file. On a main tab it never closes the app.
+- **X:** Files: scan the open folder. Saves: restore the latest backup.
+- **Y:** menu (Setup, About)
+- **Select:** Files: folder options (pin, set as default scan folder)
 
 Elements are also focusable and tappable in touch mode. Moonlight only streams while it is visible on screen.
 
@@ -87,7 +101,8 @@ ThorBro limits the encoded profile to 24,576 characters (roughly 830 games). The
 ## Privacy
 
 - The app has no `INTERNET` permission and never uses the network.
-- It stores only the stream profile, in its private app storage.
+- In its private app storage it keeps the stream profile and the pinned folders.
+- On shared storage it writes only what you ask for: moved files, the move logs in `ThorBro/logs` and save backups in `ThorBro/SaveBackups`.
 - The profile contains no passwords or logins. Credential-like fields are rejected.
 
 ## Build
@@ -115,12 +130,17 @@ Not verified:
 - The handoff from ThorBro (`adb install`, `am start` with `profile_b64`) and starting Moonlight with a real pairing are not verified end to end, including a PC id with upper-case letters.
 - Whether `Connect to PC` really lands on the desktop in Moonlight (it depends on a `Desktop` app in Sunshine).
 - Whether the launcher icon, including the monochrome layer, shows correctly in iiSU and other launchers.
+- Moving files and Undo on the real Thor (only tested with unit tests in temporary folders), Restore of a real save (does the emulator read the restored files?), and granting "All files access" in Settings.
+- Which physical buttons send X, Y and Select (depends on the Thor's controller-style setting).
+- 120 Hz.
 - No lint run yet.
 
 Not implemented:
 
 - No automatic download of Moonlight or Tailscale (links only)
 - No scan of the PC game library and no shortcuts
+- No rules yet for saves, cheats, APKs and firmware in Scan (they stay in Review), no extracting of archives
+- No ThorBro tab and no update buttons yet
 
 ## License
 
