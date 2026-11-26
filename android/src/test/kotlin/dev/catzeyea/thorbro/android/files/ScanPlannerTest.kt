@@ -120,6 +120,25 @@ class ScanPlannerTest {
     }
 
     @Test
+    fun `data files are never offered as games, not even unsure ones`() {
+        // A library whose wii folder lists .json, like ES-DE's on the Thor.
+        val roms = File(tmp.newFolder("sd"), "ROMs")
+        TestFiles.file(File(roms, "wii"), "systeminfo.txt", "Full system name:\nNintendo Wii\n\nSupported file extensions:\n.iso .json .rvz\n".toByteArray())
+        TestFiles.file(File(roms, "wii"), "Kirby.rvz")
+        val lib = Libraries.read(roms, "x")!!
+        val dl = tmp.newFolder("Download")
+        listOf("Rocket_League_config.json", "emuladores.json", "list.xml", "notes.txt", "game.cfg", "setup.INI").forEach { TestFiles.file(dl, it) }
+        val result = plan(dl, lib)
+        assertEquals(6, result.items.size)
+        result.items.forEach {
+            assertEquals(it.file.name, ScanGroup.Review, it.group)
+            assertEquals("Not a game file", it.reason)
+            assertNull(it.target)
+        }
+        assertTrue(result.toMove.isEmpty())
+    }
+
+    @Test
     fun `a base game tagged BASE goes to the switch folder, not to updates`() {
         val lib = TestFiles.library(tmp.newFolder("sd"))
         val dl = tmp.newFolder("Download")

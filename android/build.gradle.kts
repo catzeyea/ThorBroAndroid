@@ -1,10 +1,36 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeMultiplatform)
+}
+
+/**
+ * The release key, from environment variables or the untracked file `signing.properties` in the
+ * repository root (see README, "Signing"). Nothing secret is in git. Without a key, the release APK
+ * stays unsigned, so a build with the wrong key can never be published by mistake.
+ */
+data class ReleaseKey(val storeFile: File, val storePassword: String, val keyAlias: String, val keyPassword: String)
+
+fun releaseKey(): ReleaseKey? {
+    val file = rootProject.file("signing.properties")
+    val props = Properties().apply { if (file.isFile) file.inputStream().use { load(it) } }
+    fun value(env: String, key: String): String? = System.getenv(env)?.takeIf { it.isNotBlank() } ?: props.getProperty(key)?.takeIf { it.isNotBlank() }
+    val store = value("THORBRO_KEYSTORE", "storeFile") ?: return null
+    return ReleaseKey(
+        storeFile = File(store),
+        storePassword = value("THORBRO_KEYSTORE_PASSWORD", "storePassword") ?: return null,
+        keyAlias = value("THORBRO_KEY_ALIAS", "keyAlias") ?: return null,
+        keyPassword = value("THORBRO_KEY_PASSWORD", "keyPassword") ?: return null,
+    )
+}
+
+val releaseKey = releaseKey()
+if (releaseKey == null) {
+    logger.warn("ThorBro: no release key (signing.properties or THORBRO_KEYSTORE…), the release APK will be UNSIGNED.")
 }
 
 kotlin {
@@ -29,13 +55,23 @@ android {
         versionName = "0.2.0"
     }
 
+    signingConfigs {
+        if (releaseKey != null) {
+            create("release") {
+                storeFile = releaseKey.storeFile
+                storePassword = releaseKey.storePassword
+                keyAlias = releaseKey.keyAlias
+                keyPassword = releaseKey.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the local debug key so assembleRelease gives an installable APK that updates
-            // a debug install in place (same key, stored profile kept). A real release key needs a
-            // one-time uninstall, because Android refuses updates signed with a different key.
-            signingConfig = signingConfigs.getByName("debug")
+            // The dedicated release key (since 0.2.0). Android only installs an update signed with the
+            // same key as the installed app, so this key must never change or get lost.
+            signingConfig = if (releaseKey != null) signingConfigs.getByName("release") else null
         }
     }
 

@@ -56,6 +56,7 @@ data class ScanResult(
  * - Unfinished downloads (by name, or a size/time change while scanning) are skipped.
  * - Saves, cheats, APKs and firmware are not guessed: they go to Review.
  * - Java apps (.jar, .jad) are not guessed either (ES-DE's j2me takes .jar, but most are tools).
+ * - Data and text files (.json, .xml, .txt, .cfg, .ini) are "Not a game file".
  * - Games, updates and DLC use [Classifier] (the PC rules). Sure guesses start switched on in the
  *   preview; an unsure guess (several systems fit) gets its best target but starts switched off.
  * - Files that are already in the folder they belong in are listed as "Already in place".
@@ -70,6 +71,11 @@ object ScanPlanner {
     private val SAVE_EXTS = setOf(".sav", ".srm", ".dsv", ".sv", ".sa1", ".mcr", ".mcd", ".ps2", ".gci", ".sgm", ".state")
     private val CHEAT_EXTS = setOf(".pchtxt", ".cht", ".chtx")
     private val JAVA_EXTS = setOf(".jar", ".jad")
+    /**
+     * Data and text files are never games, not even unsure ones (ES-DE's gc/wii folders list .json,
+     * so a config file would otherwise be offered as a Wii game).
+     */
+    private val DATA_EXTS = setOf(".json", ".xml", ".txt", ".cfg", ".ini")
 
     /**
      * [library]: the main library (null = none found). [stillGrowing] is asked for recently changed
@@ -126,6 +132,7 @@ object ScanPlanner {
         return when {
             ext in APK_EXTS -> "App (APK): install it yourself"
             ext in JAVA_EXTS -> "Java app: not sorted"
+            ext in DATA_EXTS -> "Not a game file"
             "firmware" in lower -> "Looks like firmware: not sorted"
             ext in CHEAT_EXTS || "cheat" in lower -> "Looks like cheats: not sorted yet"
             ext in SAVE_EXTS || Regex("""(^|[^a-z])saves?([^a-z]|$)""").containsMatchIn(lower) -> "Looks like a save: not sorted yet"

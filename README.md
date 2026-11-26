@@ -6,7 +6,7 @@
 
 A small companion app for the AYN Thor that works together with [ThorBro](https://github.com/catzeyea/ThorBro) on your PC. It shows how the Thor is doing, sorts downloaded games into your ES-DE library, backs up Switch saves, and starts PC games through [Moonlight](https://moonlight-stream.org/) from a stream profile that ThorBro sends.
 
-> **Status: alpha.** The app builds and the 131 unit tests pass. Stick input and the layout were only checked by hand on a Thor. Expect rough edges. See [Not done yet](#not-done-yet).
+> **Status: alpha.** The app builds and the 132 unit tests pass. Stick input and the layout were only checked by hand on a Thor. Expect rough edges. See [Not done yet](#not-done-yet).
 
 ## How it works
 
@@ -43,7 +43,12 @@ adb shell cmd package compile -m speed-profile -f dev.catzeyea.thorbro
 
 The app has to run once before compiling, so it can hand its built-in profile to Android; compiling right after the install does nothing. Check with `adb shell dumpsys package dexopt | grep -A2 dev.catzeyea.thorbro`: it should say `status=speed-profile`, not `verify`.
 
-**Signing:** the APK is signed with a local debug key. An update only installs over a build signed with the same key. Switching to a real release key later needs a one-time uninstall first (`adb uninstall dev.catzeyea.thorbro`, or uninstall it on the Thor), and that deletes the stored stream profile, so send it again from ThorBro. Debug builds are noticeably slower and only meant for development.
+**Signing:** since 0.2.0, releases are signed with a dedicated release key (certificate `CN=ThorBro Android`, SHA-256 `1C:2C:5D:9F:1F:16:53:C5:03:F5:CB:FF:9F:E5:82:ED:2A:F5:02:03:6A:87:CD:B6:1C:25:A9:3C:B8:8A:5A:BF`). Android only installs an update that is signed with the same key as the installed app.
+
+- **Coming from 0.1.0** (signed with a debug key): uninstall the old app once (`adb uninstall dev.catzeyea.thorbro`, or uninstall it on the Thor), then install 0.2.0. This deletes the stored stream profile, so send it again from ThorBro on the PC. Save backups in `ThorBro/SaveBackups` stay.
+- From 0.2.0 on, updates install over the existing app and keep the profile.
+
+Debug builds are signed with your local debug key, are noticeably slower, and only meant for development.
 
 ## Usage
 
@@ -122,6 +127,19 @@ cp android/build/outputs/apk/release/android-release.apk dist/thorbro-android-0.
 ```
 
 `dist/` is ignored by git; the APK is published as a GitHub Release.
+
+**Release signing.** The release key is not in the repository. Gradle reads it from environment variables or from the file `signing.properties` in the repository root (ignored by git):
+
+```
+storeFile=/path/to/thorbro-release.jks
+storePassword=…
+keyAlias=thorbro
+keyPassword=…
+```
+
+The environment variables `THORBRO_KEYSTORE`, `THORBRO_KEYSTORE_PASSWORD`, `THORBRO_KEY_ALIAS` and `THORBRO_KEY_PASSWORD` take precedence. Without a key, `assembleRelease` builds `android-release-unsigned.apk`, which can't be installed, so a release can never go out with the wrong key by mistake. Use `assembleDebug` if you don't have the key.
+
+The keystore and its password must be kept safe and must never change: if they are lost, no update can be installed over the released app anymore, and every user would have to uninstall (and lose the stored profile).
 
 `./gradlew :android:assembleDebug` builds the slower debug APK for development.
 
