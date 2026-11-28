@@ -3,12 +3,16 @@ package dev.catzeyea.thorbro.android.ui
 import android.content.Context
 import android.os.Environment
 import android.os.StatFs
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.catzeyea.thorbro.android.device.Storages
+import dev.catzeyea.thorbro.android.files.FileEntry
 import dev.catzeyea.thorbro.android.files.FileMover
 import dev.catzeyea.thorbro.android.files.FileNames
+import dev.catzeyea.thorbro.android.files.FolderListing
 import dev.catzeyea.thorbro.android.files.FolderPrefs
 import dev.catzeyea.thorbro.android.files.FolderPrefsStore
 import dev.catzeyea.thorbro.android.files.Libraries
@@ -16,19 +20,23 @@ import dev.catzeyea.thorbro.android.files.MoveLog
 import dev.catzeyea.thorbro.android.files.MoveOutcome
 import dev.catzeyea.thorbro.android.files.ScanPlanner
 import dev.catzeyea.thorbro.android.files.ScanResult
+import dev.catzeyea.thorbro.android.files.SortOrder
 import dev.catzeyea.thorbro.android.files.StorageRoot
 import dev.catzeyea.thorbro.android.files.Undo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-data class FileEntry(val file: File, val isDir: Boolean, val size: Long)
-
 /** A storage or pinned folder in the left column of Files. */
 data class Place(val label: String, val path: File, val detail: String, val isStorage: Boolean)
+
+/** The actions menu (Select): [target] is the folder it works on, [fromPlace] = opened on the left bar. */
+data class ActionsMenu(val target: File, val fromPlace: Boolean)
 
 sealed interface ScanState {
     data object Idle : ScanState
@@ -66,7 +74,27 @@ class FilesController(private val context: Context, private val scope: Coroutine
         private set
     var dir by mutableStateOf<File?>(null)
         private set
+    /** The open folder as listed (unsorted, unfiltered). */
     var entries by mutableStateOf<List<FileEntry>>(emptyList())
+        private set
+    var sortOrder by mutableStateOf(SortOrder())
+        private set
+    /** Name filter of the open folder ("" = off). Cleared when another folder is opened. */
+    var query by mutableStateOf("")
+        private set
+    /** The search field is shown. */
+    var searchOpen by mutableStateOf(false)
+        private set
+    /** What the list shows: [entries] filtered by [query] and sorted. */
+    val shown: List<FileEntry> by derivedStateOf { FolderListing.sort(FolderListing.filter(entries, query), sortOrder) }
+    /** Bumped when a folder was opened and listed (not when counts arrive), so the list takes focus once. */
+    var listToken by mutableIntStateOf(0)
+        private set
+    /** Items in the Trash on all storages. */
+    var trashCount by mutableIntStateOf(0)
+        private set
+    /** The actions menu (Select), or null. */
+    var actions by mutableStateOf<ActionsMenu?>(null)
         private set
     var loading by mutableStateOf(false)
         private set
@@ -82,9 +110,16 @@ class FilesController(private val context: Context, private val scope: Coroutine
     private companion object {
         const val PROGRESS_STEP = 8L shl 20
         const val KEY_SCAN_INFO_HIDDEN = "scan_info_hidden"
+        const val KEY_SORT_DESCENDING = "sort_descending"
+        /** Per-storage Trash folder (filled from a later step on; only counted here). */
+        const val TRASH_FILES = "ThorBro/trash/files"
     }
 
     private val settings = context.getSharedPreferences("files", Context.MODE_PRIVATE)
+
+    init {
+        sortOrder = SortOrder(descending = settings.getBoolean(KEY_SORT_DESCENDING, false))
+    }
 
     /** "Don't show this again" on the Scan info card (remembered). */
     var scanInfoHidden by mutableStateOf(settings.getBoolean(KEY_SCAN_INFO_HIDDEN, false))
@@ -98,6 +133,7 @@ class FilesController(private val context: Context, private val scope: Coroutine
     private val focusMemory = mutableMapOf<String, Int>()
     private val stop = AtomicBoolean(false)
     private var started = false
+    private var countJob: Job? = null
 
     fun start() {
         if (started) return
@@ -115,6 +151,7 @@ class FilesController(private val context: Context, private val scope: Coroutine
             val found = withContext(Dispatchers.IO) { Storages.list(context) }
             storages = found
             places = withContext(Dispatchers.IO) { buildPlaces(found, prefs) }
+            trashCount = withContext(Dispatchers.IO) { found.sumOf { File(it.root, TRASH_FILES).list()?.size ?: 0 } }
         }
     }
 
@@ -146,10 +183,16 @@ class FilesController(private val context: Context, private val scope: Coroutine
     /** Opens [folder]. [focusName]: the entry that gets focus (the folder we came from). */
     fun open(folder: File, focusName: String? = null) {
         dir?.let { focusMemory[it.path] = focusIndex }
+        val sameFolder = dir == folder
         dir = folder
         loading = true
+        if (!sameFolder) {
+            query = ""
+            searchOpen = false
+        }
+        countJob?.cancel()
         scope.launch {
-            val listed = withContext(Dispatchers.IO) { list(folder) }
+            val listed = withContext(Dispatchers.IO) { FolderListing.read(folder) }
             if (dir != folder) return@launch
             loading = false
             if (listed == null) {
@@ -159,19 +202,67 @@ class FilesController(private val context: Context, private val scope: Coroutine
                 entries = listed
                 listError = null
             }
-            val byName = focusName?.let { name -> entries.indexOfFirst { it.file.name == name } }?.takeIf { it >= 0 }
-            focusIndex = (byName ?: focusMemory[folder.path] ?: 0).coerceIn(0, (entries.size - 1).coerceAtLeast(0))
+            val list = shown
+            val byName = focusName?.let { name -> list.indexOfFirst { it.name == name } }?.takeIf { it >= 0 }
+            focusIndex = (byName ?: focusMemory[folder.path] ?: 0).coerceIn(0, (list.size - 1).coerceAtLeast(0))
+            listToken++
+            if (listed != null && listed.any { it.isDir }) countChildren(folder, listed)
         }
     }
 
-    private fun list(folder: File): List<FileEntry>? {
-        val files = folder.listFiles() ?: return null
-        return files.filter { !it.name.startsWith(".") }
-            .map { FileEntry(it, it.isDirectory, if (it.isFile) it.length() else 0L) }
-            .sortedWith(compareBy<FileEntry>({ !it.isDir }, { it.file.name.lowercase() }))
+    /** Second pass: item counts of the sub folders, applied in one update (one recomposition). */
+    private fun countChildren(folder: File, listed: List<FileEntry>) {
+        countJob = scope.launch {
+            val counted = withContext(Dispatchers.IO) {
+                listed.map { e ->
+                    ensureActive()
+                    if (e.isDir) e.copy(childCount = FolderListing.countChildren(e.file)) else e
+                }
+            }
+            if (dir == folder && entries === listed) entries = counted
+        }
     }
 
-    fun refresh() = dir?.let { open(it, entries.getOrNull(focusIndex)?.file?.name) }
+    /** Name order, A to Z or Z to A (folders stay first). Remembered. */
+    fun toggleSortDirection() {
+        sortOrder = sortOrder.copy(descending = !sortOrder.descending)
+        settings.edit().putBoolean(KEY_SORT_DESCENDING, sortOrder.descending).apply()
+        focusIndex = 0
+    }
+
+    fun openSearch() {
+        searchOpen = true
+    }
+
+    /** Hides the search field; the filter stays until [clearSearch] or another folder. */
+    fun closeSearch() {
+        searchOpen = false
+    }
+
+    fun updateQuery(text: String) {
+        query = text
+        focusIndex = 0
+    }
+
+    fun clearSearch() {
+        query = ""
+        searchOpen = false
+        focusIndex = 0
+    }
+
+    // --- Actions menu (Select) ---------------------------------------------------------------------
+
+    /** Opens the actions menu for the focused folder (row or left bar), else for the open folder. */
+    fun openActions(fromPlace: Boolean) {
+        val target = focusedFolder ?: dir ?: return
+        actions = ActionsMenu(target, fromPlace)
+    }
+
+    fun closeActions() {
+        actions = null
+    }
+
+    fun refresh() = dir?.let { open(it, shown.getOrNull(focusIndex)?.name) }
 
     /** B: one folder up. False at a storage root (nothing above it here). */
     fun up(): Boolean {
@@ -197,8 +288,8 @@ class FilesController(private val context: Context, private val scope: Coroutine
 
     // --- Scan ----------------------------------------------------------------------------------------
 
-    fun startScan() {
-        val folder = dir ?: return
+    /** Scans [folder] (the folder the actions menu was opened for). */
+    fun startScan(folder: File) {
         scan = ScanState.Scanning(folder)
         scope.launch {
             val preview = withContext(Dispatchers.IO) {
@@ -297,8 +388,4 @@ class FilesController(private val context: Context, private val scope: Coroutine
         scan = ScanState.Idle
     }
 
-    /** Folder that Select works on: the focused folder row / place, else the open folder. */
-    fun selectTarget(): File? = focusedFolder ?: dir
-
-    fun notifyFile(entry: FileEntry) = notify("${entry.file.name} · ${FileNames.human(entry.size)}", false)
 }

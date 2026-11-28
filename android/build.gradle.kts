@@ -89,6 +89,7 @@ dependencies {
     // The core module is intentionally not used by the stream launcher (v1).
     implementation(libs.compose.material3)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core)
     implementation(libs.kotlinx.serialization.json)
 
     // Local unit tests (run on the PC's JVM, no device needed): ./gradlew :android:testDebugUnitTest

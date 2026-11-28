@@ -11,6 +11,7 @@ import android.os.Environment
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
+import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import dev.catzeyea.thorbro.android.apps.AppOpener
 import dev.catzeyea.thorbro.android.apps.InstalledApp
@@ -50,6 +52,7 @@ import dev.catzeyea.thorbro.android.ui.navigation.KeyRouter
 import dev.catzeyea.thorbro.android.ui.navigation.NavCommand
 import dev.catzeyea.thorbro.android.ui.navigation.SubScreen
 import dev.catzeyea.thorbro.android.ui.theme.ThorColors
+import java.io.File
 import java.io.IOException
 
 /**
@@ -134,6 +137,7 @@ class MainActivity : ComponentActivity() {
             onNoticeExpired = { uiState = uiState.copy(notice = null) },
             onNotice = ::showNotice,
             onOpenAllFilesAccess = ::openAllFilesAccess,
+            onOpenFile = ::openFile,
         )
         setContent {
             ThorBroApp(
@@ -301,6 +305,37 @@ class MainActivity : ComponentActivity() {
             } catch (e2: ActivityNotFoundException) {
                 showNotice("Open Settings → Apps → ThorBro → All files access.", isError = true)
             }
+        }
+    }
+
+    /**
+     * Opens [file] in the app Android picks for its type (Gallery for images, a chooser when several
+     * apps fit). Other apps get a content:// link from our FileProvider with read access for this one
+     * request; a file:// link would crash (FileUriExposedException). Measured on the Thor 2026-11-28.
+     */
+    private fun openFile(file: File) {
+        val ext = file.extension.lowercase()
+        if (ext == "apk") {
+            // Installing would need the "install unknown apps" permission, which ThorBro doesn't ask for.
+            showNotice("ThorBro doesn't install apps. Open the APK from the system Files app.", isError = true)
+            return
+        }
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+        if (mime == null) {
+            showNotice(if (ext.isEmpty()) "No app is known for ${file.name}." else "No app is known for .$ext files.", isError = true)
+            return
+        }
+        val uri = try {
+            FileProvider.getUriForFile(this, "$packageName.files", file)
+        } catch (e: IllegalArgumentException) {
+            showNotice("${file.name} can't be shared with other apps.", isError = true)
+            return
+        }
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            showNotice("No app on the Thor opens ${file.name}.", isError = true)
         }
     }
 

@@ -42,11 +42,8 @@ sealed interface SubScreen {
     /** "How it works": one card per tab. */
     data object Help : SubScreen
 
-    /** "What does Scan do?" before a scan (until "Don't show this again"). */
-    data class ScanInfo(val folderName: String) : SubScreen
-
-    /** Select in Files: pin / unpin a folder, make it the default scan folder. */
-    data class FolderOptions(val path: String) : SubScreen
+    /** "What does Scan do?" before a scan of [folderPath] (until "Don't show this again"). */
+    data class ScanInfo(val folderPath: String) : SubScreen
 
     /** Scan preview, moving progress and result of "Scan this folder". */
     data object Scan : SubScreen

@@ -9,7 +9,7 @@ object HelpTexts {
 
     data class Point(val title: String, val text: String)
 
-    fun scanIntro(folder: String) = "Scan reads the folder you have open (here $folder). Nothing is moved until you say so."
+    fun scanIntro(folder: String) = "Scan reads one folder, here $folder. Nothing is moved until you say so."
 
     val SCAN_POINTS = listOf(
         Point(
@@ -32,7 +32,7 @@ object HelpTexts {
 
     const val START = "How your Thor is doing: battery, storage, CPU and temperature. ThorBro looks happy, busy, tired or " +
         "stuffed, and sleeps when no PC is connected."
-    const val FILES = "Browse the Thor and sort it. Pin folders you use a lot."
+    const val FILES = "Browse the Thor and sort it. Select opens the actions: scan a folder, pin it, make it the default scan folder."
     const val SAVES = "Your emulator saves, grouped by emulator. Back up before you try something risky, restore when you " +
         "need it. Peanuts saves can be backed up, but not restored yet."
     const val STREAM = "Connect to your PC and start your PC games on the Thor. Setup tells you what to do on the PC first."

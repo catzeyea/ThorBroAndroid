@@ -99,6 +99,8 @@ class AppActions(
     val onNoticeExpired: () -> Unit,
     val onNotice: (text: String, isError: Boolean) -> Unit,
     val onOpenAllFilesAccess: () -> Unit,
+    /** Opens a file in another app (A on a file in Files). */
+    val onOpenFile: (java.io.File) -> Unit,
 )
 
 /** The state holders of the tabs. */
@@ -216,12 +218,20 @@ private val Y = listOf("Y")
 private val SELECT = listOf("Select")
 private val SHOULDERS = listOf("L1", "R1")
 
+/** Files tab: the actions menu, the search field, a filter, or the plain list. */
+private fun filesHints(files: FilesController, switchTab: Hint): List<Hint> = when {
+    files.actions != null -> listOf(Hint(A, "Choose"), Hint(B, "Close"))
+    files.searchOpen -> listOf(Hint(B, "Clear search"), switchTab)
+    files.query.isNotEmpty() -> listOf(Hint(A, "Open"), Hint(B, "Clear filter"), Hint(SELECT, "Actions"), switchTab)
+    else -> listOf(Hint(A, "Open"), Hint(B, "Up"), Hint(SELECT, "Actions"), switchTab)
+}
+
 private fun hintsFor(tab: AppTab, subScreen: SubScreen?, controllers: Controllers): List<Hint> {
     val switchTab = Hint(SHOULDERS, "Switch tab")
     return when (subScreen) {
         null -> when (tab) {
             AppTab.Start -> listOf(Hint(Y, "Menu"), switchTab)
-            AppTab.Files -> listOf(Hint(A, "Open"), Hint(B, "Back"), Hint(X, "Scan this folder"), Hint(SELECT, "Pin or folder options"), switchTab)
+            AppTab.Files -> filesHints(controllers.files, switchTab)
             AppTab.Saves -> listOf(Hint(A, "Open game"), Hint(Y, "Menu"), switchTab)
             AppTab.Stream -> listOf(Hint(A, "Select"), Hint(Y, "Menu"), switchTab)
         }

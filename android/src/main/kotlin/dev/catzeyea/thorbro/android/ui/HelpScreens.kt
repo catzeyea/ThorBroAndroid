@@ -1,5 +1,6 @@
 package dev.catzeyea.thorbro.android.ui
 
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +65,8 @@ fun ScanPoints(textSize: Int = 16, gap: Int = 14) {
  * card off for good ("Don't show this again", remembered).
  */
 @Composable
-fun ScanInfoScreen(folderName: String, files: FilesController, entry: FocusRequester, actions: AppActions) {
+fun ScanInfoScreen(folderPath: String, files: FilesController, entry: FocusRequester, actions: AppActions) {
+    val folderName = File(folderPath).name
     val toggleHidden = { files.rememberScanInfoHidden(!files.scanInfoHidden) }
     OnControllerKeys { button ->
         if (button == ControllerButton.Select) {
@@ -76,7 +78,7 @@ fun ScanInfoScreen(folderName: String, files: FilesController, entry: FocusReque
     }
     val scan = {
         actions.onCloseSubScreen()
-        files.startScan()
+        files.startScan(File(folderPath))
         actions.onOpenSubScreen(SubScreen.Scan)
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -147,11 +149,11 @@ fun HelpScreen(entry: FocusRequester) {
         HelpCard(
             "Files",
             HelpTexts.FILES,
-            listOf("X" to "scan", "Select" to "pin"),
+            listOf("A" to "open", "Select" to "actions"),
             Modifier.weight(1.15f).fillMaxHeight().focusRequester(entry).focusableCard(ThorShapes.PcCard.shape(), interaction),
         ) {
             Text("What does Scan do?", style = ThorType.style(17, FontWeight.Bold, ThorColors.Orange))
-            Text("Scan reads the folder you have open. Nothing is moved until you say so.", style = ThorType.style(14, color = ThorColors.Body, lineHeight = 1.35f))
+            Text("Scan reads one folder: Select on it, then Scan this folder. Nothing is moved until you say so.", style = ThorType.style(14, color = ThorColors.Body, lineHeight = 1.35f))
             ScanPoints(textSize = 14, gap = 8)
         }
     }

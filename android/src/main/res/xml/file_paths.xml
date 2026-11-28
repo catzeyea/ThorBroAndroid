@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Folders the FileProvider may hand out: internal shared storage and every mounted SD card / USB stick. -->
+<paths>
+    <external-path name="internal" path="." />
+    <root-path name="storage" path="/storage" />
+</paths>

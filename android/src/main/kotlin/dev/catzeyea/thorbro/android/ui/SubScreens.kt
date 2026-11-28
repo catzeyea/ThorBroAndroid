@@ -52,12 +52,11 @@ fun SubScreenContent(subScreen: SubScreen, state: AppUiState, entry: FocusReques
             OnControllerKeys { false }
             AboutScreen(state, entry, actions)
         }
-        is SubScreen.FolderOptions -> FolderOptionsScreen(subScreen.path, controllers.files, entry, actions)
         SubScreen.Scan -> ScanScreen(controllers.files, entry, actions)
         is SubScreen.SaveGame -> SaveGameScreen(subScreen.saveKey, controllers.saves, entry, actions)
         is SubScreen.ConfirmRestore -> ConfirmRestoreScreen(subScreen.saveKey, subScreen.backupPath, controllers.saves, entry, actions)
         SubScreen.Help -> HelpScreen(entry)
-        is SubScreen.ScanInfo -> ScanInfoScreen(subScreen.folderName, controllers.files, entry, actions)
+        is SubScreen.ScanInfo -> ScanInfoScreen(subScreen.folderPath, controllers.files, entry, actions)
         // Drawn as an overlay by ThorBroApp, never as a full screen.
         SubScreen.Menu -> Unit
     }
